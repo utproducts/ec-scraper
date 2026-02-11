@@ -466,19 +466,13 @@ app.post('/api/sms/webhook', async (req, res) => {
       const gcUrl = `https://web.gc.com/teams/${gcTeamId}`;
       console.log(`🎮 GameChanger link detected! Team ID: ${gcTeamId}`);
 
-      // Save to gamechanger_links table
-      const { error: gcError } = await supabase.from('gamechanger_links').insert({
-        phone_from: From,
-        team_id: gcTeamId,
-        full_url: gcUrl,
-        raw_message: Body,
-        status: 'pending'
-      });
+      let matchedEventId = null;
+      let matchedTeamId = null;
+      let matchedTeamName = null;
+      let matchedAgeGroup = null;
+      let gcStatus = 'pending';
 
-      if (gcError) console.error('GC link save error:', gcError.message);
-      else console.log('✅ GameChanger link saved!');
-
-      // Auto-match to team by phone number
+      // STEP 1: Try to match by phone number to a known coach
       const cleanPhone = From.replace(/\D/g, '').slice(-10);
       const { data: matchedTeams } = await supabase
         .from('teams')
@@ -486,28 +480,90 @@ app.post('/api/sms/webhook', async (req, res) => {
         .order('created_at', { ascending: false });
       
       if (matchedTeams) {
-        const match = matchedTeams.find(t => {
+        const phoneMatch = matchedTeams.find(t => {
           const tp = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
           return tp && tp === cleanPhone;
         });
         
-        if (match) {
-          await supabase.from('gamechanger_links')
-            .update({
-              status: 'matched',
-              matched_team_id: match.id,
-              matched_team_name: match.name,
-              matched_age_group: match.age_group,
-              event_id: match.event_id
-            })
-            .eq('team_id', gcTeamId)
-            .eq('phone_from', From);
-          console.log(`🔗 Auto-matched GC link to team: ${match.name} (${match.age_group})`);
+        if (phoneMatch) {
+          matchedTeamId = phoneMatch.id;
+          matchedTeamName = phoneMatch.name;
+          matchedAgeGroup = phoneMatch.age_group;
+          matchedEventId = phoneMatch.event_id;
+          gcStatus = 'matched';
+          console.log(`🔗 Auto-matched GC link by phone to team: ${phoneMatch.name} (${phoneMatch.age_group})`);
         }
       }
 
-      // Send confirmation to coach
-      const gcResponse = `Thanks Coach! Got your GameChanger link. We'll get those stats posted to the state site. Great weekend! 🏟️ If you have any other questions, feel free to reach out!`;
+      // STEP 2: If no phone match, check conversation history for event context
+      if (!matchedEventId) {
+        console.log('📜 No phone match — checking conversation history for event context...');
+        
+        // Look at the last outbound message we sent to this phone
+        const { data: lastOutbound } = await supabase
+          .from('sms_log')
+          .select('response, question')
+          .eq('phone_from', From)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (lastOutbound && lastOutbound.length > 0) {
+          // Check both our responses and campaign messages for event names
+          const recentMessages = lastOutbound.map(m => `${m.question || ''} ${m.response || ''}`).join(' ');
+          
+          // Try to match event name from conversation
+          const { data: allEvents } = await supabase.from('events').select('id, name');
+          if (allEvents) {
+            for (const event of allEvents) {
+              if (recentMessages.toLowerCase().includes(event.name.toLowerCase())) {
+                matchedEventId = event.id;
+                console.log(`📌 Matched to event "${event.name}" from conversation context`);
+                
+                // Now try to find the team within this event by phone
+                if (matchedTeams) {
+                  const eventTeamMatch = matchedTeams.find(t => 
+                    t.event_id === event.id && 
+                    (t.coach_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone
+                  );
+                  if (eventTeamMatch) {
+                    matchedTeamId = eventTeamMatch.id;
+                    matchedTeamName = eventTeamMatch.name;
+                    matchedAgeGroup = eventTeamMatch.age_group;
+                    gcStatus = 'matched';
+                  }
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Save to gamechanger_links table
+      const { error: gcError } = await supabase.from('gamechanger_links').insert({
+        phone_from: From,
+        team_id: gcTeamId,
+        full_url: gcUrl,
+        raw_message: Body,
+        status: gcStatus,
+        event_id: matchedEventId,
+        matched_team_id: matchedTeamId,
+        matched_team_name: matchedTeamName,
+        matched_age_group: matchedAgeGroup
+      });
+
+      if (gcError) console.error('GC link save error:', gcError.message);
+      else console.log(`✅ GameChanger link saved! Status: ${gcStatus}, Event: ${matchedEventId || 'unmatched'}`);
+
+      // Build appropriate response
+      let gcResponse;
+      if (gcStatus === 'matched') {
+        gcResponse = `Thanks Coach! Got your GameChanger link for ${matchedTeamName}. We'll get those stats posted to the state site! 🏟️`;
+      } else if (matchedEventId) {
+        gcResponse = `Thanks! Got your GameChanger link. Which team is this for? Just reply with the team name and we'll get it matched up! 🏟️`;
+      } else {
+        gcResponse = `Thanks for the GameChanger link! Which team and event is this for? Just reply with the team name and we'll get those stats posted to the state site! 🏟️`;
+      }
 
       await twilioClient.messages.create({
         body: gcResponse,
