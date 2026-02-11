@@ -478,6 +478,34 @@ app.post('/api/sms/webhook', async (req, res) => {
       if (gcError) console.error('GC link save error:', gcError.message);
       else console.log('✅ GameChanger link saved!');
 
+      // Auto-match to team by phone number
+      const cleanPhone = From.replace(/\D/g, '').slice(-10);
+      const { data: matchedTeams } = await supabase
+        .from('teams')
+        .select('id, name, age_group, event_id, coach_phone')
+        .order('created_at', { ascending: false });
+      
+      if (matchedTeams) {
+        const match = matchedTeams.find(t => {
+          const tp = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
+          return tp && tp === cleanPhone;
+        });
+        
+        if (match) {
+          await supabase.from('gamechanger_links')
+            .update({
+              status: 'matched',
+              matched_team_id: match.id,
+              matched_team_name: match.name,
+              matched_age_group: match.age_group,
+              event_id: match.event_id
+            })
+            .eq('team_id', gcTeamId)
+            .eq('phone_from', From);
+          console.log(`🔗 Auto-matched GC link to team: ${match.name} (${match.age_group})`);
+        }
+      }
+
       // Send confirmation to coach
       const gcResponse = `Thanks Coach! Got your GameChanger link. We'll get those stats posted to the state site. Great weekend! 🏟️ If you have any other questions, feel free to reach out!`;
 
