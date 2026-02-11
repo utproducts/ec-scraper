@@ -394,12 +394,66 @@ app.post('/api/sms/batch', async (req, res) => {
   res.json({ sent, failed, total: phones.length });
 });
 
+// ===== NEW: Director manual SMS reply endpoint =====
+app.post('/api/sms/send', async (req, res) => {
+  const { to, message, director_id, sent_by } = req.body;
+  
+  console.log(`📤 Director sending SMS to ${to}: ${message}`);
+  
+  if (!to || !message) {
+    return res.status(400).json({ error: 'Missing "to" or "message"' });
+  }
+  
+  try {
+    // Send via Twilio
+    const smsResult = await twilioClient.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to
+    });
+    
+    console.log('✅ Director SMS sent:', smsResult.sid);
+    
+    res.json({ 
+      success: true, 
+      sid: smsResult.sid,
+      message: 'SMS sent successfully' 
+    });
+  } catch (error) {
+    console.error('❌ Failed to send SMS:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Twilio webhook for incoming SMS
 app.post('/api/sms/webhook', async (req, res) => {
   const { From, To, Body } = req.body;
   console.log(`Incoming SMS from ${From} to ${To}: ${Body}`);
 
   try {
+    // ===== CHECK IF AI IS PAUSED FOR THIS NUMBER =====
+    const { data: pauseData } = await supabase
+      .from('ai_pauses')
+      .select('*')
+      .eq('phone', From)
+      .gte('expires_at', new Date().toISOString())
+      .limit(1);
+    
+    if (pauseData && pauseData.length > 0) {
+      console.log(`⏸️ AI paused for ${From} until ${pauseData[0].expires_at} — skipping auto-reply`);
+      
+      // Still log the message but don't respond
+      await supabase.from('sms_log').insert({
+        phone_from: From,
+        phone_to: To,
+        question: Body,
+        response: null,
+        status: 'paused'
+      });
+      
+      return res.status(200).send('<Response></Response>');
+    }
+
     let tournamentContext = '';
     const bodyLower = Body.toLowerCase().trim();
 
@@ -797,6 +851,7 @@ app.listen(PORT, () => {
   console.log(`📚 Knowledge base search enabled`);
   console.log(`📍 Geo-search enabled`);
   console.log(`💬 Conversation memory enabled`);
+  console.log(`⏸️  AI pause system enabled`);
 });
 
 module.exports = app;
