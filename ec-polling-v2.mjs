@@ -42,6 +42,36 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// ─── TEAM NAME NORMALIZATION ─────────────────────────────────
+const TEAM_ALIASES = {
+  'Ballplex Bolts 11U': 'Ballplex Academy 11U',
+  'Warriors 11U': 'Warriors Baseball Club Orange 11U',
+  'tc elite 11u': 'TC ELITE 11U',
+  'TC ELITE 11U 11U': 'TC ELITE 11U',
+  'Tc Elite 11u': 'TC ELITE 11U',
+  'TC Elite 11U': 'TC ELITE 11U',
+  'TC ELITE 11U 11u': 'TC ELITE 11U',
+};
+
+function normalizeTeamName(name) {
+  if (!name) return name;
+  // Check exact alias match
+  if (TEAM_ALIASES[name]) return TEAM_ALIASES[name];
+  // Check case-insensitive
+  const lower = name.toLowerCase();
+  for (const [alias, canonical] of Object.entries(TEAM_ALIASES)) {
+    if (alias.toLowerCase() === lower) return canonical;
+  }
+  // Strip "TBD-" placeholder names — return as-is but flagged
+  // Remove trailing duplicate age groups like "11U 11U" -> "11U"
+  const deduped = name.replace(/(\d+U)\s+\1/i, '$1');
+  if (deduped !== name) return deduped;
+  return name;
+}
+
+
+// ─── TEAM NAME NORMALIZATION ─────────────────────────────────
+
 // ─── BROWSER ─────────────────────────────────────────────────
 let browser = null;
 let page = null;
@@ -269,7 +299,7 @@ async function scrapeGame(url) {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
     await sleep(3000);
 
-    const data = await page.evaluate(() => {
+    const rawData = await page.evaluate(() => {
       const away = document.querySelector('[data-testid="away-team-name"]')?.innerText?.trim() || '';
       const home = document.querySelector('[data-testid="home-team-name"]')?.innerText?.trim() || '';
       const tables = [...document.querySelectorAll('[data-testid="data-table"]')].map(t => t.innerText);
@@ -309,8 +339,11 @@ async function scrapeGame(url) {
       return { away, home, tables, awayScore, homeScore, headerStatus, lineScore, gameTime };
     });
 
-    if (!data.away && !data.home) return null;
-    return data;
+    if (!rawData.away && !rawData.home) return null;
+    // Normalize team names
+    rawData.away = normalizeTeamName(rawData.away);
+    rawData.home = normalizeTeamName(rawData.home);
+    return rawData;
   } catch (err) {
     console.error(`  ❌ Scrape error: ${err.message}`);
     return null;
@@ -367,6 +400,56 @@ async function findOrCreatePlayer(playerName, jersey, teamId) {
 
 async function saveGame(url, data, ageGroup, eventName) {
   const { away, home, tables, awayScore, homeScore, headerStatus, gameTime } = data;
+  
+  // ─── DEDUP CHECK: Skip if game between same teams already exists ───
+  // Look up team IDs for away and home
+  const { data: awayTeamRow } = await supabase.from('ec_teams').select('id').eq('team_name', away).single();
+  const { data: homeTeamRow } = await supabase.from('ec_teams').select('id').eq('team_name', home).single();
+  
+  if (awayTeamRow && homeTeamRow) {
+    // Check both directions: A vs B or B vs A
+    const { data: existingGame1 } = await supabase.from('ec_games')
+      .select('id')
+      .eq('away_team_id', awayTeamRow.id)
+      .eq('home_team_id', homeTeamRow.id)
+      .limit(1)
+      .single();
+    
+    const { data: existingGame2 } = await supabase.from('ec_games')
+      .select('id')
+      .eq('away_team_id', homeTeamRow.id)
+      .eq('home_team_id', awayTeamRow.id)
+      .limit(1)
+      .single();
+    
+    if (existingGame1 || existingGame2) {
+      const existingId = existingGame1?.id || existingGame2?.id;
+      console.log(`  ♻️  Game already exists (updating): ${away} vs ${home}`);
+      
+      // Update the existing game's score and status
+      const finalAwayScore = awayScore !== null ? awayScore : 0;
+      const finalHomeScore = homeScore !== null ? homeScore : 0;
+      let status = headerStatus || null;
+      
+      if (existingGame1) {
+        await supabase.from('ec_games').update({
+          away_score: finalAwayScore,
+          home_score: finalHomeScore,
+          status: status || 'final',
+        }).eq('id', existingGame1.id);
+      } else {
+        // Game exists but teams are flipped — update with swapped scores
+        await supabase.from('ec_games').update({
+          away_score: finalHomeScore,
+          home_score: finalAwayScore,
+          status: status || 'final',
+        }).eq('id', existingGame2.id);
+      }
+      
+      return existingId;
+    }
+  }
+  // ─── END DEDUP CHECK ───
   
   const gcGameMatch = url.match(/schedule\/([a-f0-9-]+)\//);
   const gcGameId = gcGameMatch ? gcGameMatch[1] : url;
