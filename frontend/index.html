@@ -544,32 +544,30 @@
       }
 
       container.innerHTML = potgs.map(p => {
-        const scoreColor = p.potg_score >= 20 ? '#f59e0b' : p.potg_score >= 10 ? '#94a3b8' : '#475569';
-        const borderColor = p.potg_score >= 20 ? 'rgba(245,158,11,0.4)' : 'rgba(148,163,184,0.2)';
+        const pScore = p.potg_score || p.score || 0;
+        const pName = p.player?.player_name || p.name || 'Unknown';
+        const pJersey = p.player?.jersey_number || p.jersey || '';
+        const pTeam = p.team?.team_name || p.team || '';
+        const pHighlights = p.highlights || '';
+        const pGame = p.game || '';
         
-        // Build game score text
-        let gameText = '';
-        if (p.game) {
-          const g = p.game;
-          const awayTeam = g.away_team?.team_name || g.away_team || '';
-          const homeTeam = g.home_team?.team_name || g.home_team || '';
-          gameText = `${awayTeam} ${g.away_score}, ${homeTeam} ${g.home_score}`;
-        }
+        const scoreColor = pScore >= 20 ? '#f59e0b' : pScore >= 10 ? '#94a3b8' : '#475569';
+        const borderColor = pScore >= 20 ? 'rgba(245,158,11,0.4)' : 'rgba(148,163,184,0.2)';
 
         return `
           <div class="potg-card" style="border: 1px solid ${borderColor};">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
               <div>
                 <div class="potg-label fc" style="color:#f59e0b;">⭐ Player of the Game</div>
-                <div class="potg-name fc">${p.player?.player_name || 'Unknown'}</div>
-                <div class="potg-info">#${p.player?.jersey_number || ''} •• ${p.team?.team_name || ''}</div>
+                <div class="potg-name fc">${pName}</div>
+                <div class="potg-info">#${pJersey} •• ${pTeam}</div>
               </div>
               <div class="potg-score-circle fc" style="border: 2px solid ${scoreColor}; color: ${scoreColor};">
-                ${p.potg_score}
+                ${pScore}
               </div>
             </div>
-            <div class="potg-highlights fc">${p.highlights || ''}</div>
-            <div class="potg-game fc">${gameText}</div>
+            <div class="potg-highlights fc">${pHighlights}</div>
+            <div class="potg-game fc">${pGame}</div>
           </div>
         `;
       }).join('');
