@@ -1300,7 +1300,7 @@ app.get('/api/ec/potg', async (req, res) => {
     // Deduplicate
     const seen = new Set();
     const deduped = potg.filter(r => {
-      const key = (r.name || "") + "|" + (r.highlights || "");
+      const key = (r.name || "") + "|" + r.score;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
