@@ -1,0 +1,14 @@
+# USSSA Event Central — Team URLs
+# Format: URL | Age Group | Event Name | Start Date | End Date
+# Dates in YYYY-MM-DD format. Only games within these dates will be scraped.
+
+# Space Coast Presidents Day - 11U (Feb 14-15, 2026)
+https://web.gc.com/teams/fXEnuJhCgzAL | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/4dj1c8ViBjU3 | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/yAo2y8yv1DvH | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/Loo08zcjs7Uj | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/EFLIFGXbsKqQ | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/dyDPDOqQrM3l | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/D4CK5E1BGDsq | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/RNZWvqcbYACe | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15
+https://web.gc.com/teams/CTvHKLd3OkXs | 11U | Space Coast Presidents Day | 2026-02-14 | 2026-02-15

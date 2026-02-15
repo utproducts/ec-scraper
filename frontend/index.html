@@ -14,7 +14,7 @@
 
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
 
     .fc { font-family: 'Barlow Condensed', sans-serif; }
 
@@ -37,22 +37,24 @@
     .tab { background: none; border: none; cursor: pointer; padding: 10px 16px; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; border-bottom: 2px solid transparent; transition: all 0.2s; }
     .tab.active { color: #f59e0b; border-bottom-color: #f59e0b; }
 
+    /* Age Group Filter Bar */
+    .age-bar { display: flex; gap: 6px; padding: 12px 0 0; overflow-x: auto; }
+    .age-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 6px 16px; cursor: pointer; color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; transition: all 0.2s; }
+    .age-btn:hover { background: rgba(255,255,255,0.08); }
+    .age-btn.active { background: linear-gradient(135deg, #cc0000, #990000); border-color: transparent; color: #fff; }
+
     /* Content */
     .content { max-width: 1200px; margin: 0 auto; padding: 20px 20px 60px; }
 
-    /* Age filters */
-    .age-filters { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px; }
-    .age-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 6px 14px; cursor: pointer; color: #94a3b8; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; transition: all 0.2s; }
-    .age-btn.active { background: linear-gradient(135deg, #cc0000, #990000); border: none; color: #fff; }
-
     /* Game cards */
     .games-list { display: flex; flex-direction: column; gap: 12px; }
-    .game-card { background: #0d1b33; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; transition: border-color 0.3s; }
+    .game-card { background: #0d1b33; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; transition: border-color 0.3s; animation: fadeIn 0.3s ease; }
     .game-card.live { background: linear-gradient(135deg, #0a1628, #1a2744); border-color: rgba(239,68,68,0.3); }
     .game-card .shimmer-bar { height: 2px; background: linear-gradient(90deg, #ef4444, #f59e0b, #ef4444); background-size: 200% 100%; animation: shimmer 2s linear infinite; }
     .game-header { padding: 14px 16px; cursor: pointer; }
     .game-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .game-meta { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; }
+    .game-datetime { font-size: 11px; color: #64748b; margin-bottom: 8px; }
     .game-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; display: flex; align-items: center; gap: 4px; }
     .game-status.live { color: #ef4444; }
     .game-status.final { color: #64748b; }
@@ -92,22 +94,11 @@
     .stat-k { color: #f59e0b !important; font-weight: 600; }
     .stat-zero { color: #3d4f63 !important; font-weight: 400; }
 
-    /* Line score */
-    .line-score { overflow-x: auto; margin-bottom: 16px; }
-    .line-score table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .line-score th { padding: 4px 6px; text-align: center; color: #475569; font-size: 10px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.06); min-width: 24px; }
-    .line-score th:first-child { text-align: left; }
-    .line-score .rhe { color: #f59e0b; font-weight: 800; border-left: 1px solid rgba(255,255,255,0.08); }
-    .line-score td { padding: 4px 6px; text-align: center; font-size: 13px; }
-    .line-score td:first-child { text-align: left; color: #cbd5e1; font-weight: 600; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
-    .line-score .total { font-weight: 800; color: #fff; border-left: 1px solid rgba(255,255,255,0.08); }
-    .line-score .inn-score { font-weight: 700; }
-    .line-score .inn-zero { color: #3d4f63; }
-
     /* Leaderboard */
     .lb-toggle { display: flex; gap: 0; margin-bottom: 20px; background: rgba(255,255,255,0.03); border-radius: 8px; overflow: hidden; width: fit-content; }
     .lb-btn { background: transparent; border: none; cursor: pointer; padding: 8px 20px; color: #64748b; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; transition: all 0.2s; }
     .lb-btn.active { background: linear-gradient(135deg, #cc0000, #990000); color: #fff; }
+    .lb-min-note { font-size: 10px; color: #475569; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
     .lb-panel { background: #0a1225; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
     .lb-table { width: 100%; border-collapse: collapse; }
     .lb-table th { padding: 10px 6px; font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid rgba(255,255,255,0.06); position: sticky; top: 0; background: #0a1225; }
@@ -126,14 +117,27 @@
 
     /* POTG */
     .potg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-    .potg-card { background: linear-gradient(145deg, #0a1628, #162040, #1a1040); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; }
-    .potg-card .glow { position: absolute; border-radius: 50%; }
+    .potg-card { background: linear-gradient(145deg, #0a1628, #162040, #1a1040); border-radius: 16px; padding: 24px; position: relative; overflow: hidden; animation: fadeIn 0.3s ease; }
     .potg-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
     .potg-name { font-size: 22px; font-weight: 800; color: #fff; text-transform: uppercase; line-height: 1.1; }
     .potg-info { font-size: 12px; color: #94a3b8; margin-top: 2px; }
     .potg-score-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
     .potg-highlights { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 15px; color: #f8fafc; font-weight: 600; }
     .potg-game { font-size: 11px; color: #64748b; }
+
+    /* All Tournament Team */
+    .att-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 16px; }
+    .att-card { background: linear-gradient(145deg, #0a1628, #162040); border: 1px solid rgba(245,158,11,0.15); border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 14px; animation: fadeIn 0.3s ease; }
+    .att-rank { font-size: 24px; font-weight: 900; min-width: 32px; text-align: center; }
+    .att-rank.gold { color: #f59e0b; }
+    .att-rank.silver { color: #94a3b8; }
+    .att-rank.bronze { color: #b45309; }
+    .att-rank.normal { color: #334155; }
+    .att-info { flex: 1; }
+    .att-name { font-size: 16px; font-weight: 800; color: #fff; text-transform: uppercase; }
+    .att-team { font-size: 11px; color: #64748b; }
+    .att-stats { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .att-score { font-size: 20px; font-weight: 800; color: #f59e0b; min-width: 50px; text-align: right; }
 
     /* Standings */
     .standings-panel { background: #0a1225; border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; }
@@ -150,25 +154,15 @@
     .diff-pos { color: #22c55e; font-weight: 700; }
     .diff-neg { color: #ef4444; font-weight: 700; }
 
-    /* All-Tournament placeholder */
-    .at-placeholder { margin-top: 40px; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); border-radius: 16px; padding: 40px; text-align: center; }
-
     /* Loading */
     .loading { text-align: center; padding: 60px; color: #475569; }
-
-    /* Section label */
     .section-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
-
-    /* Footer */
     .footer { border-top: 1px solid rgba(255,255,255,0.04); padding: 16px 20px; text-align: center; font-size: 10px; color: #334155; text-transform: uppercase; letter-spacing: 2px; }
-
-    /* Empty state */
     .empty { text-align: center; padding: 60px; color: #475569; }
   </style>
 </head>
 <body>
 
-  <!-- HEADER -->
   <header class="header">
     <div class="header-inner">
       <div class="header-top">
@@ -185,49 +179,47 @@
         <div class="event-name fc">USSSA FL Event Central</div>
         <div class="event-meta">Live Stats • Leaderboards • Player of the Game</div>
       </div>
+      <!-- Age Group Filter -->
+      <div class="age-bar" id="ageBar">
+        <button class="age-btn fc active" data-age="all" onclick="setAge('all')">ALL</button>
+      </div>
       <div class="tabs">
         <button class="tab fc active" data-tab="scores">Scoreboard</button>
         <button class="tab fc" data-tab="potg">Player of the Game</button>
         <button class="tab fc" data-tab="leaders">Leaderboards</button>
+        <button class="tab fc" data-tab="tournament">All-Tournament</button>
         <button class="tab fc" data-tab="standings">Standings</button>
       </div>
     </div>
   </header>
 
-  <!-- CONTENT -->
   <main class="content">
-    <!-- SCOREBOARD -->
     <div id="panel-scores" class="panel">
-      <div id="games-list" class="games-list">
-        <div class="loading">Loading games...</div>
-      </div>
+      <div id="games-list" class="games-list"><div class="loading">Loading games...</div></div>
     </div>
 
-    <!-- POTG -->
     <div id="panel-potg" class="panel" style="display:none;">
       <div class="section-label fc">Top Performers</div>
-      <div id="potg-grid" class="potg-grid">
-        <div class="loading">Loading...</div>
-      </div>
-      <div class="at-placeholder">
-        <div style="font-size:32px;margin-bottom:8px;">⭐</div>
-        <div class="fc" style="font-size:16px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:2px;">All-Tournament Team</div>
-        <div style="font-size:13px;color:#334155;margin-top:4px;">Selected after the final game</div>
-      </div>
+      <div id="potg-grid" class="potg-grid"><div class="loading">Loading...</div></div>
     </div>
 
-    <!-- LEADERBOARDS -->
     <div id="panel-leaders" class="panel" style="display:none;">
       <div class="lb-toggle">
         <button class="lb-btn fc active" data-lb="batting">Batting</button>
         <button class="lb-btn fc" data-lb="pitching">Pitching</button>
       </div>
+      <div id="lb-min-note" class="lb-min-note"></div>
       <div class="lb-panel">
         <div id="lb-content"><div class="loading">Loading...</div></div>
       </div>
     </div>
 
-    <!-- STANDINGS -->
+    <div id="panel-tournament" class="panel" style="display:none;">
+      <div class="section-label fc">⭐ All-Tournament Team — Top 15 Performers</div>
+      <div id="att-min-note" class="lb-min-note"></div>
+      <div id="att-content"><div class="loading">Loading...</div></div>
+    </div>
+
     <div id="panel-standings" class="panel" style="display:none;">
       <div class="section-label fc">Standings</div>
       <div class="standings-panel">
@@ -239,22 +231,56 @@
   <footer class="footer fc">Powered by USSSA Event Central • Stats via GameChanger</footer>
 
   <script>
-    // ─── CONFIG ──────────────────────────────────────────
-    const API_BASE = window.location.origin; // same server
+    const API_BASE = window.location.origin;
     let currentTab = 'scores';
     let currentLB = 'batting';
+    let currentAge = 'all';
     let expandedGame = null;
     let gamesData = [];
     let leaderData = {};
+    let ageGroups = [];
 
-    // ─── CLOCK ───────────────────────────────────────────
+    // ─── CLOCK ──────────────────────────────
     function updateClock() {
       document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     }
     updateClock();
     setInterval(updateClock, 30000);
 
-    // ─── TABS ────────────────────────────────────────────
+    // ─── AGE GROUP FILTER ───────────────────
+    async function loadAgeGroups() {
+      try {
+        const res = await fetch(API_BASE + '/api/ec/age-groups');
+        const data = await res.json();
+        ageGroups = data.age_groups || [];
+        renderAgeBar();
+      } catch (err) {
+        console.error('Age groups error:', err);
+      }
+    }
+
+    function renderAgeBar() {
+      const bar = document.getElementById('ageBar');
+      let html = '<button class="age-btn fc active" data-age="all" onclick="setAge(\'all\')">ALL</button>';
+      ageGroups.forEach(ag => {
+        html += `<button class="age-btn fc" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
+      });
+      bar.innerHTML = html;
+    }
+
+    function setAge(age) {
+      currentAge = age;
+      document.querySelectorAll('.age-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.age === age);
+      });
+      loadAll();
+    }
+
+    function ageParam() {
+      return currentAge !== 'all' ? `age_group=${encodeURIComponent(currentAge)}` : '';
+    }
+
+    // ─── TABS ───────────────────────────────
     document.querySelectorAll('.tab').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -265,7 +291,7 @@
       });
     });
 
-    // ─── LB TOGGLE ───────────────────────────────────────
+    // ─── LB TOGGLE ──────────────────────────
     document.querySelectorAll('.lb-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.lb-btn').forEach(b => b.classList.remove('active'));
@@ -275,22 +301,30 @@
       });
     });
 
-    // ─── HELPERS ─────────────────────────────────────────
+    // ─── HELPERS ────────────────────────────
     function sc(val, cls) {
       if (!val || val === 0) return `<td class="fc stat-zero">0</td>`;
       return `<td class="fc ${cls}">${val}</td>`;
     }
 
-    // ─── FETCH GAMES ─────────────────────────────────────
+    // ─── FETCH GAMES ────────────────────────
     async function loadGames() {
       try {
-        const res = await fetch(API_BASE + '/api/ec/games');
+        const q = ageParam();
+        const res = await fetch(API_BASE + '/api/ec/games' + (q ? '?' + q : ''));
         const data = await res.json();
         gamesData = data.games || [];
+        
+        // Sort: live games first, then by date/time desc
+        gamesData.sort((a, b) => {
+          if (a.status === 'live' && b.status !== 'live') return -1;
+          if (b.status === 'live' && a.status !== 'live') return 1;
+          return 0; // keep existing order (date desc from API)
+        });
+        
         renderGames();
       } catch (err) {
         document.getElementById('games-list').innerHTML = '<div class="empty">Failed to load games</div>';
-        console.error('Load games error:', err);
       }
     }
 
@@ -301,6 +335,8 @@
       if (liveCount > 0) {
         document.getElementById('liveCount').style.display = 'flex';
         document.getElementById('liveNum').textContent = liveCount;
+      } else {
+        document.getElementById('liveCount').style.display = 'none';
       }
 
       if (gamesData.length === 0) {
@@ -314,13 +350,23 @@
         const isExpanded = expandedGame === g.id;
         const awayWinning = (g.away_score || 0) > (g.home_score || 0);
         const homeWinning = (g.home_score || 0) > (g.away_score || 0);
+        
+        // Format date/time
+        let dateStr = '';
+        if (g.game_date) {
+          const d = new Date(g.game_date + 'T12:00:00');
+          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          dateStr = `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
+        }
+        if (g.game_time) dateStr += ` • ${g.game_time}`;
 
         return `
           <div class="game-card ${isLive ? 'live' : ''}" data-id="${g.id}">
             ${isLive ? '<div class="shimmer-bar"></div>' : ''}
             <div class="game-header" onclick="toggleBoxScore('${g.id}')">
               <div class="game-top">
-                <span class="game-meta fc">${g.age_group || '—'} • ${g.field || 'TBD'}</span>
+                <span class="game-meta fc">${g.age_group || '—'} • ${g.event_name || g.field || 'TBD'}</span>
                 <div style="display:flex;align-items:center;gap:8px;">
                   ${isLive ? `<span class="game-status live fc"><span class="live-dot"></span>LIVE</span>` : ''}
                   ${isFinal ? `<span class="game-status final fc">FINAL</span>` : ''}
@@ -328,6 +374,7 @@
                   <span class="expand-arrow ${isExpanded ? 'open' : ''}">▼</span>
                 </div>
               </div>
+              ${dateStr ? `<div class="game-datetime fc">${dateStr}</div>` : ''}
               <div class="team-row">
                 <span class="team-name">${g.away_team}</span>
                 <span class="team-score fc ${awayWinning ? 'winning' : 'losing'}">${g.away_score ?? '-'}</span>
@@ -344,17 +391,11 @@
       }).join('');
     }
 
-    // ─── TOGGLE BOX SCORE ────────────────────────────────
+    // ─── TOGGLE BOX SCORE ───────────────────
     async function toggleBoxScore(gameId) {
-      if (expandedGame === gameId) {
-        expandedGame = null;
-        renderGames();
-        return;
-      }
-
+      if (expandedGame === gameId) { expandedGame = null; renderGames(); return; }
       expandedGame = gameId;
       renderGames();
-
       const panel = document.getElementById('box-' + gameId);
       panel.innerHTML = '<div class="loading" style="padding:20px;">Loading box score...</div>';
       panel.classList.add('open');
@@ -363,51 +404,39 @@
         const res = await fetch(API_BASE + '/api/ec/games/' + gameId);
         const data = await res.json();
         const g = data.game;
-
-        let html = '';
-
-        // Away team box score
-        html += renderTeamBox(g.away_team, g.away_score, g.boxScore.away);
+        let html = renderTeamBox(g.away_team, g.away_score, g.boxScore.away);
         html += '<div class="box-divider"></div>';
-        // Home team box score
         html += renderTeamBox(g.home_team, g.home_score, g.boxScore.home);
-
         panel.innerHTML = html;
       } catch (err) {
         panel.innerHTML = '<div class="empty">Failed to load box score</div>';
-        console.error('Box score error:', err);
       }
     }
 
     function renderTeamBox(teamName, score, data) {
-      let html = `
-        <div class="box-team-header">
-          <span class="box-team-name fc">${teamName}</span>
-          <span class="box-team-score fc">${score}</span>
-        </div>
-      `;
+      let html = `<div class="box-team-header">
+        <span class="box-team-name fc">${teamName}</span>
+        <span class="box-team-score fc">${score}</span>
+      </div>`;
 
-      // Batting table
       if (data.batting && data.batting.length > 0) {
         const totals = data.batting.reduce((t, p) => ({
-          ab: t.ab + (p.ab||0), r: t.r + (p.r||0), h: t.h + (p.h||0),
-          rbi: t.rbi + (p.rbi||0), bb: t.bb + (p.bb||0), so: t.so + (p.so||0)
-        }), { ab:0, r:0, h:0, rbi:0, bb:0, so:0 });
+          ab: t.ab+(p.ab||0), r: t.r+(p.r||0), h: t.h+(p.h||0),
+          rbi: t.rbi+(p.rbi||0), bb: t.bb+(p.bb||0), so: t.so+(p.so||0)
+        }), {ab:0,r:0,h:0,rbi:0,bb:0,so:0});
 
-        html += `<table class="stats-table">
-          <thead><tr>
-            <th class="fc" style="text-align:left">BATTING</th>
-            <th class="fc">AB</th><th class="fc">R</th><th class="fc">H</th>
-            <th class="fc">RBI</th><th class="fc">BB</th><th class="fc">SO</th>
-          </tr></thead><tbody>`;
+        html += `<table class="stats-table"><thead><tr>
+          <th class="fc" style="text-align:left">BATTING</th>
+          <th class="fc">AB</th><th class="fc">R</th><th class="fc">H</th>
+          <th class="fc">RBI</th><th class="fc">BB</th><th class="fc">SO</th>
+        </tr></thead><tbody>`;
 
         for (const p of data.batting) {
           html += `<tr>
-            <td><span class="player-jersey fc">#${p.jersey}</span>${p.name}<span class="player-pos fc">${p.pos ? ' ' + p.pos : ''}</span></td>
-            ${sc(p.ab, '')}${sc(p.r, 'stat-r')}${sc(p.h, 'stat-h')}${sc(p.rbi, 'stat-rbi')}${sc(p.bb, '')}${sc(p.so, 'stat-so')}
+            <td><span class="player-jersey fc">#${p.jersey}</span>${p.name}</td>
+            ${sc(p.ab,'')}${sc(p.r,'stat-r')}${sc(p.h,'stat-h')}${sc(p.rbi,'stat-rbi')}${sc(p.bb,'')}${sc(p.so,'stat-so')}
           </tr>`;
         }
-
         html += `<tr class="totals">
           <td class="fc" style="font-size:10px;letter-spacing:1px;">TEAM</td>
           <td class="fc">${totals.ab}</td><td class="fc">${totals.r}</td><td class="fc">${totals.h}</td>
@@ -415,35 +444,33 @@
         </tr></tbody></table>`;
       }
 
-      // Pitching table
       if (data.pitching && data.pitching.length > 0) {
-        html += `<table class="stats-table" style="margin-top:8px;">
-          <thead><tr>
-            <th class="fc" style="text-align:left">PITCHING</th>
-            <th class="fc">IP</th><th class="fc">H</th><th class="fc">R</th>
-            <th class="fc">ER</th><th class="fc">BB</th><th class="fc">SO</th>
-          </tr></thead><tbody>`;
-
+        html += `<table class="stats-table" style="margin-top:8px;"><thead><tr>
+          <th class="fc" style="text-align:left">PITCHING</th>
+          <th class="fc">IP</th><th class="fc">H</th><th class="fc">R</th>
+          <th class="fc">ER</th><th class="fc">BB</th><th class="fc">SO</th>
+        </tr></thead><tbody>`;
         for (const p of data.pitching) {
           html += `<tr>
             <td><span class="player-jersey fc">#${p.jersey}</span>${p.name}</td>
-            <td class="fc" style="text-align:center;">${p.ip || 0}</td>
-            <td class="fc" style="text-align:center;">${p.h || 0}</td>
-            ${sc(p.r, 'stat-so')}${sc(p.er, 'stat-so')}${sc(p.bb, '')}${sc(p.so, 'stat-k')}
+            <td class="fc" style="text-align:center;">${p.ip||0}</td>
+            <td class="fc" style="text-align:center;">${p.h||0}</td>
+            ${sc(p.r,'stat-so')}${sc(p.er,'stat-so')}${sc(p.bb,'')}${sc(p.so,'stat-k')}
           </tr>`;
         }
-
         html += '</tbody></table>';
       }
-
       return html;
     }
 
-    // ─── LEADERBOARDS ────────────────────────────────────
+    // ─── LEADERBOARDS ───────────────────────
     async function loadLeaderboards() {
       try {
-        const res = await fetch(API_BASE + '/api/ec/leaderboards');
+        const q = ageParam();
+        const params = q ? q + '&min_ab=5&min_ip=5' : 'min_ab=5&min_ip=5';
+        const res = await fetch(API_BASE + '/api/ec/leaderboards?' + params);
         leaderData = await res.json();
+        document.getElementById('lb-min-note').textContent = `Minimum ${leaderData.minAB || 5} AB for batting • Minimum ${leaderData.minIP || 5} IP for pitching`;
         renderLeaderboard();
       } catch (err) {
         document.getElementById('lb-content').innerHTML = '<div class="empty">Failed to load leaderboards</div>';
@@ -453,49 +480,144 @@
     function renderLeaderboard() {
       const container = document.getElementById('lb-content');
       const isBatting = currentLB === 'batting';
-      const data = isBatting ? leaderData.battingLeaders : leaderData.pitchingLeaders;
+      const data = isBatting ? leaderData.batting : leaderData.pitching;
 
       if (!data || data.length === 0) {
-        container.innerHTML = '<div class="empty">No stats yet</div>';
+        container.innerHTML = `<div class="empty">No players meet the minimum requirement yet (${isBatting ? (leaderData.minAB||5)+' AB' : (leaderData.minIP||5)+' IP'})</div>`;
         return;
       }
 
-      const cols = isBatting
-        ? [['#',''], ['Player',''], ['AVG','hl'], ['GP',''], ['AB',''], ['H',''], ['HR',''], ['RBI',''], ['R',''], ['OPS','']]
-        : [['#',''], ['Player',''], ['ERA','hl'], ['GP',''], ['IP',''], ['K',''], ['BB',''], ['WHIP',''], ['W',''], ['SV','']];
-
-      const keys = isBatting
-        ? ['rank','name','avg','gp','ab','h','hr','rbi','r','ops']
-        : ['rank','name','era','gp','ip','so','bb','whip','w','sv'];
-
-      let html = `<table class="lb-table"><thead><tr>`;
-      cols.forEach(([label]) => { html += `<th class="fc">${label}</th>`; });
-      html += `</tr></thead><tbody>`;
-
-      data.forEach((row, i) => {
-        html += `<tr>`;
-        keys.forEach((key, ci) => {
-          if (ci === 0) {
-            html += `<td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i + 1}</td>`;
-          } else if (ci === 1) {
-            html += `<td><div class="lb-player-name">${row.name}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>`;
-          } else if (cols[ci][1] === 'hl') {
-            html += `<td class="fc lb-highlight">${row[key]}</td>`;
-          } else {
-            html += `<td>${row[key]}</td>`;
-          }
+      if (isBatting) {
+        let html = `<table class="lb-table"><thead><tr>
+          <th class="fc">#</th><th class="fc">Player</th><th class="fc">AVG</th>
+          <th class="fc">GP</th><th class="fc">AB</th><th class="fc">H</th>
+          <th class="fc">RBI</th><th class="fc">R</th><th class="fc">BB</th><th class="fc">SO</th>
+        </tr></thead><tbody>`;
+        data.forEach((row, i) => {
+          html += `<tr>
+            <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
+            <td><div class="lb-player-name">${row.name}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
+            <td class="fc lb-highlight">${row.avg}</td>
+            <td>${row.games}</td><td>${row.ab}</td><td>${row.h}</td>
+            <td>${row.rbi}</td><td>${row.r}</td><td>${row.bb}</td><td>${row.so}</td>
+          </tr>`;
         });
-        html += `</tr>`;
-      });
-
-      html += `</tbody></table>`;
-      container.innerHTML = html;
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } else {
+        let html = `<table class="lb-table"><thead><tr>
+          <th class="fc">#</th><th class="fc">Player</th><th class="fc">ERA</th>
+          <th class="fc">GP</th><th class="fc">IP</th><th class="fc">K</th>
+          <th class="fc">BB</th><th class="fc">WHIP</th><th class="fc">H</th><th class="fc">ER</th>
+        </tr></thead><tbody>`;
+        data.forEach((row, i) => {
+          html += `<tr>
+            <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
+            <td><div class="lb-player-name">${row.name}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
+            <td class="fc lb-highlight">${row.era}</td>
+            <td>${row.games}</td><td>${row.ip}</td><td>${row.so}</td>
+            <td>${row.bb}</td><td>${row.whip}</td><td>${row.h}</td><td>${row.er}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      }
     }
 
-    // ─── STANDINGS ───────────────────────────────────────
+    // ─── POTG ───────────────────────────────
+    async function loadPOTG() {
+      try {
+        const q = ageParam();
+        const res = await fetch(API_BASE + '/api/ec/potg' + (q ? '?' + q : ''));
+        const data = await res.json();
+        renderPOTG(data.potg || []);
+      } catch (err) {
+        document.getElementById('potg-grid').innerHTML = '<div class="empty">Failed to load POTG</div>';
+      }
+    }
+
+    function renderPOTG(potgs) {
+      const container = document.getElementById('potg-grid');
+      if (potgs.length === 0) {
+        container.innerHTML = '<div class="empty">No player of the game data yet</div>';
+        return;
+      }
+
+      container.innerHTML = potgs.map(p => {
+        const scoreColor = p.potg_score >= 20 ? '#f59e0b' : p.potg_score >= 10 ? '#94a3b8' : '#475569';
+        const borderColor = p.potg_score >= 20 ? 'rgba(245,158,11,0.4)' : 'rgba(148,163,184,0.2)';
+        
+        // Build game score text
+        let gameText = '';
+        if (p.game) {
+          const g = p.game;
+          const awayTeam = g.away_team?.team_name || g.away_team || '';
+          const homeTeam = g.home_team?.team_name || g.home_team || '';
+          gameText = `${awayTeam} ${g.away_score}, ${homeTeam} ${g.home_score}`;
+        }
+
+        return `
+          <div class="potg-card" style="border: 1px solid ${borderColor};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+              <div>
+                <div class="potg-label fc" style="color:#f59e0b;">⭐ Player of the Game</div>
+                <div class="potg-name fc">${p.player?.player_name || 'Unknown'}</div>
+                <div class="potg-info">#${p.player?.jersey_number || ''} •• ${p.team?.team_name || ''}</div>
+              </div>
+              <div class="potg-score-circle fc" style="border: 2px solid ${scoreColor}; color: ${scoreColor};">
+                ${p.potg_score}
+              </div>
+            </div>
+            <div class="potg-highlights fc">${p.highlights || ''}</div>
+            <div class="potg-game fc">${gameText}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ─── ALL-TOURNAMENT TEAM ────────────────
+    async function loadAllTournament() {
+      try {
+        const q = ageParam();
+        const params = q ? q + '&min_ab=5&min_ip=5' : 'min_ab=5&min_ip=5';
+        const res = await fetch(API_BASE + '/api/ec/all-tournament?' + params);
+        const data = await res.json();
+        document.getElementById('att-min-note').textContent = 
+          `${data.ageGroup || 'All'} • Min ${data.minAB || 5} AB or ${data.minIP || 5} IP • Weighted performance score`;
+        renderAllTournament(data.team || []);
+      } catch (err) {
+        document.getElementById('att-content').innerHTML = '<div class="empty">Failed to load all-tournament team</div>';
+      }
+    }
+
+    function renderAllTournament(players) {
+      const container = document.getElementById('att-content');
+      if (players.length === 0) {
+        container.innerHTML = '<div class="empty">Not enough games played yet to determine all-tournament team</div>';
+        return;
+      }
+
+      container.innerHTML = '<div class="att-grid">' + players.map((p, i) => {
+        const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
+        return `
+          <div class="att-card">
+            <div class="att-rank fc ${rankClass}">${i + 1}</div>
+            <div class="att-info">
+              <div class="att-name fc">${p.name}</div>
+              <div class="att-team">#${p.jersey} • ${p.team} • ${p.games} GP</div>
+              <div class="att-stats">${p.highlights}</div>
+            </div>
+            <div class="att-score fc">${p.score}</div>
+          </div>
+        `;
+      }).join('') + '</div>';
+    }
+
+    // ─── STANDINGS ──────────────────────────
     async function loadStandings() {
       try {
-        const res = await fetch(API_BASE + '/api/ec/standings');
+        const q = ageParam();
+        const res = await fetch(API_BASE + '/api/ec/standings' + (q ? '?' + q : ''));
         const data = await res.json();
         renderStandings(data.standings || []);
       } catch (err) {
@@ -505,10 +627,7 @@
 
     function renderStandings(standings) {
       const container = document.getElementById('standings-content');
-      if (standings.length === 0) {
-        container.innerHTML = '<div class="empty">No standings yet</div>';
-        return;
-      }
+      if (standings.length === 0) { container.innerHTML = '<div class="empty">No standings yet</div>'; return; }
 
       let html = `<table class="standings-table"><thead><tr>
         <th class="fc">#</th><th class="fc">Team</th><th class="fc">W</th><th class="fc">L</th>
@@ -518,12 +637,10 @@
       standings.forEach((t, i) => {
         const diffClass = t.diff.startsWith('+') ? 'diff-pos' : 'diff-neg';
         html += `<tr>
-          <td class="fc" style="font-weight:800;color:${i < 2 ? '#f59e0b' : '#475569'}">${i + 1}</td>
+          <td class="fc" style="font-weight:800;color:${i < 2 ? '#f59e0b' : '#475569'}">${i+1}</td>
           <td style="color:#e2e8f0;font-weight:600;">${t.team}</td>
-          <td class="fc w-col">${t.w}</td>
-          <td class="fc l-col">${t.l}</td>
-          <td style="color:#94a3b8;">${t.rs}</td>
-          <td style="color:#94a3b8;">${t.ra}</td>
+          <td class="fc w-col">${t.w}</td><td class="fc l-col">${t.l}</td>
+          <td style="color:#94a3b8;">${t.rs}</td><td style="color:#94a3b8;">${t.ra}</td>
           <td class="fc ${diffClass}">${t.diff}</td>
         </tr>`;
       });
@@ -532,53 +649,23 @@
       container.innerHTML = html;
     }
 
-    // ─── POTG ────────────────────────────────────────────
-    async function renderPOTG() {
-      const container = document.getElementById('potg-grid');
-      try {
-        const res = await fetch(API_BASE + '/api/ec/potg');
-        const data = await res.json();
-        const potg = data.potg || [];
-
-        if (potg.length === 0) {
-          container.innerHTML = '<div class="empty">No POTG data yet</div>';
-          return;
-        }
-
-        const colors = ['#f59e0b', '#94a3b8', '#cd7f32'];
-        container.innerHTML = potg.map((p, i) => {
-          const ac = colors[i] || '#64748b';
-          return `
-            <div class="potg-card" style="border:1px solid ${ac}33;">
-              <div class="glow" style="top:-30px;right:-30px;width:120px;height:120px;background:${ac}08;"></div>
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;position:relative;">
-                <div>
-                  <div class="potg-label fc" style="color:${ac};">${p.isLive ? '⚡ LIVE POTG' : '⭐ PLAYER OF THE GAME'}</div>
-                  <div class="potg-name fc">${p.name}</div>
-                  <div class="potg-info">#${p.jersey} • ${p.position || ''} • ${p.team}</div>
-                </div>
-                <div class="potg-score-circle fc" style="background:linear-gradient(135deg,${ac}22,${ac}44);border:2px solid ${ac}66;color:${ac};">${p.score}</div>
-              </div>
-              <div class="potg-highlights">${p.highlights || ''}</div>
-              <div class="potg-game">${p.game}</div>
-            </div>
-          `;
-        }).join('');
-      } catch (err) {
-        container.innerHTML = '<div class="empty">Failed to load POTG</div>';
-      }
+    // ─── LOAD ALL ───────────────────────────
+    async function loadAll() {
+      await Promise.all([loadGames(), loadLeaderboards(), loadStandings(), loadPOTG(), loadAllTournament()]);
     }
 
-    // ─── INIT ────────────────────────────────────────────
+    // ─── INIT ───────────────────────────────
     async function init() {
-      await Promise.all([loadGames(), loadLeaderboards(), loadStandings()]);
-      renderPOTG();
+      await loadAgeGroups();
+      await loadAll();
 
       // Auto-refresh every 60 seconds
       setInterval(async () => {
         await loadGames();
         if (currentTab === 'leaders') await loadLeaderboards();
         if (currentTab === 'standings') await loadStandings();
+        if (currentTab === 'potg') await loadPOTG();
+        if (currentTab === 'tournament') await loadAllTournament();
       }, 60000);
     }
 
