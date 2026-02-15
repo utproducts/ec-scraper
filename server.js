@@ -1297,7 +1297,15 @@ app.get('/api/ec/potg', async (req, res) => {
       game: (teamMap[p.game?.away_team_id] || 'Away') + ' ' + (p.game?.away_score || 0) + ', ' + (teamMap[p.game?.home_team_id] || 'Home') + ' ' + (p.game?.home_score || 0),
     }));
 
-    res.json({ potg });
+    // Deduplicate
+    const seen = new Set();
+    const deduped = potg.filter(r => {
+      const key = (r.name || "") + "|" + (r.game || "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    res.json({ potg: deduped });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
