@@ -13,6 +13,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve Event Central frontend
+app.use('/ec', express.static('frontend'));
+
 // Initialize services
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -925,6 +928,179 @@ Respond as if you're texting back personally.`
     console.error('❌ ERROR STACK:', error.stack);
   }
 });
+
+// ===== EVENT CENTRAL API =====
+
+// GET /api/ec/games — all games with team info
+app.get('/api/ec/games', async (req, res) => {
+  try {
+    let query = supabase
+      .from('ec_games')
+      .select('id, gc_game_id, home_score, away_score, age_group, status, game_date, field, innings_completed, home_team_id, away_team_id')
+      .order('game_date', { ascending: false });
+
+    if (req.query.status) query = query.eq('status', req.query.status);
+    if (req.query.age_group) query = query.eq('age_group', req.query.age_group);
+
+    const { data: games, error } = await query;
+    if (error) throw error;
+
+    // Get team names
+    const teamIds = [...new Set(games.flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
+    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds);
+    const teamMap = {};
+    (teams || []).forEach(t => teamMap[t.id] = t.team_name);
+
+    const result = games.map(g => ({
+      ...g,
+      home_team: teamMap[g.home_team_id] || 'TBD',
+      away_team: teamMap[g.away_team_id] || 'TBD',
+    }));
+
+    res.json({ games: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ec/games/:id — single game with full box score
+app.get('/api/ec/games/:id', async (req, res) => {
+  try {
+    const { data: game, error: gErr } = await supabase
+      .from('ec_games')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    if (gErr) throw gErr;
+
+    // Get team names
+    const { data: homeTeam } = await supabase.from('ec_teams').select('id, team_name').eq('id', game.home_team_id).single();
+    const { data: awayTeam } = await supabase.from('ec_teams').select('id, team_name').eq('id', game.away_team_id).single();
+
+    // Get all stats
+    const { data: stats } = await supabase
+      .from('ec_game_stats')
+      .select('*, player:ec_players!player_id(player_name, jersey_number, primary_position)')
+      .eq('game_id', req.params.id);
+
+    const boxScore = { away: { batting: [], pitching: [] }, home: { batting: [], pitching: [] } };
+
+    for (const s of (stats || [])) {
+      const side = s.team_id === game.home_team_id ? 'home' : 'away';
+      const entry = { name: s.player?.player_name || '', jersey: s.player?.jersey_number || '', pos: s.player?.primary_position || '' };
+
+      if (s.stat_type === 'batting') {
+        boxScore[side].batting.push({ ...entry, ab: s.ab, r: s.r, h: s.h, rbi: s.rbi, bb: s.bb, so: s.so });
+      } else if (s.stat_type === 'pitching') {
+        boxScore[side].pitching.push({ ...entry, ip: s.ip, h: s.p_h, r: s.p_r, er: s.p_er, bb: s.p_bb, so: s.p_so });
+      }
+    }
+
+    res.json({
+      game: {
+        ...game,
+        home_team: homeTeam?.team_name || 'TBD',
+        away_team: awayTeam?.team_name || 'TBD',
+        boxScore,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ec/leaderboards — batting & pitching leaders
+app.get('/api/ec/leaderboards', async (req, res) => {
+  try {
+    const { data: batStats } = await supabase
+      .from('ec_game_stats')
+      .select('ab, r, h, hr, rbi, bb, so, doubles, triples, sb, hbp, sf, player:ec_players!player_id(id, player_name, jersey_number), team:ec_teams!team_id(team_name)')
+      .eq('stat_type', 'batting');
+
+    const batBy = {};
+    for (const s of (batStats || [])) {
+      const pid = s.player?.id;
+      if (!pid) continue;
+      if (!batBy[pid]) batBy[pid] = { name: s.player.player_name, jersey: s.player.jersey_number, team: s.team?.team_name || '', gp: 0, ab: 0, r: 0, h: 0, hr: 0, rbi: 0, bb: 0, so: 0, doubles: 0, triples: 0 };
+      const p = batBy[pid];
+      p.gp++; p.ab += s.ab||0; p.r += s.r||0; p.h += s.h||0; p.hr += s.hr||0; p.rbi += s.rbi||0; p.bb += s.bb||0; p.so += s.so||0; p.doubles += s.doubles||0; p.triples += s.triples||0;
+    }
+
+    const battingLeaders = Object.values(batBy).filter(p => p.ab >= 1).map(p => {
+      const avg = p.ab > 0 ? p.h / p.ab : 0;
+      const singles = p.h - p.doubles - p.triples - p.hr;
+      const tb = singles + (p.doubles*2) + (p.triples*3) + (p.hr*4);
+      const slg = p.ab > 0 ? tb / p.ab : 0;
+      const obp = (p.ab+p.bb) > 0 ? (p.h+p.bb)/(p.ab+p.bb) : 0;
+      return { ...p, avg: avg.toFixed(3).replace(/^0/,''), ops: (obp+slg).toFixed(3).replace(/^0/,'') };
+    }).sort((a,b) => parseFloat(b.avg) - parseFloat(a.avg)).slice(0,20);
+
+    const { data: pitStats } = await supabase
+      .from('ec_game_stats')
+      .select('ip, p_h, p_r, p_er, p_bb, p_so, win, loss, save, player:ec_players!player_id(id, player_name, jersey_number), team:ec_teams!team_id(team_name)')
+      .eq('stat_type', 'pitching');
+
+    const pitBy = {};
+    for (const s of (pitStats || [])) {
+      const pid = s.player?.id;
+      if (!pid) continue;
+      if (!pitBy[pid]) pitBy[pid] = { name: s.player.player_name, jersey: s.player.jersey_number, team: s.team?.team_name || '', gp: 0, ip: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, w: 0, sv: 0 };
+      const p = pitBy[pid];
+      p.gp++; p.ip += parseFloat(s.ip)||0; p.h += s.p_h||0; p.r += s.p_r||0; p.er += s.p_er||0; p.bb += s.p_bb||0; p.so += s.p_so||0;
+      if (s.win) p.w++; if (s.save) p.sv++;
+    }
+
+    const pitchingLeaders = Object.values(pitBy).filter(p => p.ip >= 1).map(p => {
+      const era = p.ip > 0 ? (p.er/p.ip)*7 : 0;
+      const whip = p.ip > 0 ? (p.bb+p.h)/p.ip : 0;
+      return { ...p, ip: p.ip.toFixed(1), era: era.toFixed(2), whip: whip.toFixed(2) };
+    }).sort((a,b) => parseFloat(a.era) - parseFloat(b.era)).slice(0,20);
+
+    res.json({ battingLeaders, pitchingLeaders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ec/standings — W-L records
+app.get('/api/ec/standings', async (req, res) => {
+  try {
+    const { data: games } = await supabase
+      .from('ec_games')
+      .select('home_score, away_score, home_team_id, away_team_id, age_group')
+      .eq('status', 'final');
+
+    const teamIds = [...new Set((games||[]).flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
+    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds);
+    const teamMap = {};
+    (teams || []).forEach(t => teamMap[t.id] = t.team_name);
+
+    const standings = {};
+    for (const g of (games || [])) {
+      if (!standings[g.home_team_id]) standings[g.home_team_id] = { team: teamMap[g.home_team_id]||'Unknown', w:0, l:0, rs:0, ra:0 };
+      if (!standings[g.away_team_id]) standings[g.away_team_id] = { team: teamMap[g.away_team_id]||'Unknown', w:0, l:0, rs:0, ra:0 };
+
+      standings[g.home_team_id].rs += g.home_score||0;
+      standings[g.home_team_id].ra += g.away_score||0;
+      standings[g.away_team_id].rs += g.away_score||0;
+      standings[g.away_team_id].ra += g.home_score||0;
+
+      if (g.home_score > g.away_score) { standings[g.home_team_id].w++; standings[g.away_team_id].l++; }
+      else if (g.away_score > g.home_score) { standings[g.away_team_id].w++; standings[g.home_team_id].l++; }
+    }
+
+    const result = Object.values(standings)
+      .map(t => ({ ...t, diff: (t.rs-t.ra) > 0 ? `+${t.rs-t.ra}` : `${t.rs-t.ra}` }))
+      .sort((a,b) => b.w - a.w || a.l - b.l);
+
+    res.json({ standings: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+console.log('✅ Event Central API routes loaded');
+
 
 // Start server
 app.listen(PORT, () => {
