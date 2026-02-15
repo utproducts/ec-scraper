@@ -533,10 +533,40 @@
     }
 
     // ─── POTG ────────────────────────────────────────────
-    function renderPOTG() {
-      // For now, POTG comes from the games data - we'll enhance this later
+    async function renderPOTG() {
       const container = document.getElementById('potg-grid');
-      container.innerHTML = '<div class="empty">POTG data loads from game box scores — click games on the Scoreboard tab to see individual game POTGs</div>';
+      try {
+        const res = await fetch(API_BASE + '/api/ec/potg');
+        const data = await res.json();
+        const potg = data.potg || [];
+
+        if (potg.length === 0) {
+          container.innerHTML = '<div class="empty">No POTG data yet</div>';
+          return;
+        }
+
+        const colors = ['#f59e0b', '#94a3b8', '#cd7f32'];
+        container.innerHTML = potg.map((p, i) => {
+          const ac = colors[i] || '#64748b';
+          return `
+            <div class="potg-card" style="border:1px solid ${ac}33;">
+              <div class="glow" style="top:-30px;right:-30px;width:120px;height:120px;background:${ac}08;"></div>
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;position:relative;">
+                <div>
+                  <div class="potg-label fc" style="color:${ac};">${p.isLive ? '⚡ LIVE POTG' : '⭐ PLAYER OF THE GAME'}</div>
+                  <div class="potg-name fc">${p.name}</div>
+                  <div class="potg-info">#${p.jersey} • ${p.position || ''} • ${p.team}</div>
+                </div>
+                <div class="potg-score-circle fc" style="background:linear-gradient(135deg,${ac}22,${ac}44);border:2px solid ${ac}66;color:${ac};">${p.score}</div>
+              </div>
+              <div class="potg-highlights">${p.highlights || ''}</div>
+              <div class="potg-game">${p.game}</div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        container.innerHTML = '<div class="empty">Failed to load POTG</div>';
+      }
     }
 
     // ─── INIT ────────────────────────────────────────────

@@ -1,0 +1,13 @@
+# USSSA Event Central — Game URLs
+# Add one GameChanger box score URL per line
+# Lines starting with # are ignored
+# The polling service reads this file every cycle, so you can add/remove URLs while it runs
+
+# PB PRIME 11U vs Ballplex Academy 11U (Presidents Day Classic)
+https://web.gc.com/teams/D4CK5E1BGDsq/schedule/b60bffc5-0679-41fd-942f-49e782f9ad85/box-score
+
+# 11u Scorps vs Central Florida Suns 11U (Jan 25)
+https://web.gc.com/teams/UWz8I5X3ypcu/2026-spring-11u-scorps/schedule/1b0de349-3adf-47da-b5e6-ade2a1f02391/box-score
+
+# Add more game URLs here as they become available
+# You can add URLs while the service is running — it re-reads this file each cycle
