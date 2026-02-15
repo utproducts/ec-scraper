@@ -183,37 +183,64 @@ async function scrapeGame(url) {
 }
 
 // ─── PARSE STATS ─────────────────────────────────────────
+
+function isStatNumber(str) {
+  // Check if a string looks like a stat number (integer or IP like 3.2)
+  return /^\d+(\.\d)?$/.test(str);
+}
+
 function parseBatting(tableText) {
   const lines = tableText.split('\n').map(l => l.trim()).filter(l => l);
   const players = [];
   
-  // Find where headers end — headers are LINEUP, AB, R, H, RBI, BB, SO
+  // Skip header row — LINEUP, AB, R, H, RBI, BB, SO
   let i = 0;
   const headers = new Set(['LINEUP', 'AB', 'R', 'H', 'RBI', 'BB', 'SO']);
   while (i < lines.length && headers.has(lines[i])) i++;
   
-  // Now parse player rows: Name, #Jersey (Pos), then 6 stat numbers
   while (i < lines.length) {
     if (lines[i] === 'TEAM') break;
     
     const name = lines[i];
     i++;
+    if (i >= lines.length) break;
     
-    // Next should be jersey line like "#24 (LF)" or "#99 (3B, P)"
     let jersey = '';
     let pos = '';
-    if (i < lines.length && lines[i].startsWith('#')) {
-      const jLine = lines[i];
-      const jMatch = jLine.match(/^#(\d+)\s*(?:\(([^)]+)\))?/);
+    
+    // Figure out what the next line is:
+    // Option A: "#24 (LF)" or "#99 (3B, P)" — jersey + position
+    // Option B: "#26" — jersey only, no position
+    // Option C: "(1B)" or "(LF)" — position only, no jersey
+    // Option D: "3" — it's already a stat number (no jersey/position at all)
+    
+    const nextLine = lines[i];
+    
+    if (nextLine.startsWith('#')) {
+      // Has jersey number: "#24 (LF)" or "#26"
+      const jMatch = nextLine.match(/^#(\d+)\s*(?:\(([^)]+)\))?/);
       if (jMatch) {
         jersey = jMatch[1];
         pos = jMatch[2] || '';
       }
       i++;
+    } else if (nextLine.startsWith('(')) {
+      // Position only, no jersey: "(1B)" or "(LF)"
+      const pMatch = nextLine.match(/^\(([^)]+)\)/);
+      if (pMatch) {
+        pos = pMatch[1];
+      }
+      i++;
+    } else if (isStatNumber(nextLine)) {
+      // No jersey or position at all — this IS the first stat
+      // Don't advance i — we'll read stats starting here
+    } else {
+      // Unknown format — try to skip it
+      i++;
     }
     
-    // Next 6 lines are stats: AB, R, H, RBI, BB, SO
-    if (i + 5 < lines.length) {
+    // Read 6 stat values: AB, R, H, RBI, BB, SO
+    if (i + 5 < lines.length && isStatNumber(lines[i])) {
       const ab = parseInt(lines[i]) || 0;
       const r = parseInt(lines[i + 1]) || 0;
       const h = parseInt(lines[i + 2]) || 0;
@@ -224,7 +251,8 @@ function parseBatting(tableText) {
       players.push({ name, jersey, pos, ab, r, h, rbi, bb, so });
       i += 6;
     } else {
-      break;
+      // Can't find stats — skip this entry
+      continue;
     }
   }
   
@@ -234,50 +262,51 @@ function parseBatting(tableText) {
 function parsePitching(tableText) {
   const lines = tableText.split('\n').map(l => l.trim()).filter(l => l);
   const pitchers = [];
-  let i = 0;
-
+  
   // Skip headers: PITCHING, IP, H, R, ER, BB, SO
-  const headerKeys = ['PITCHING', 'IP', 'H', 'R', 'ER', 'BB', 'SO'];
-  while (i < lines.length && headerKeys.includes(lines[i])) i++;
-
+  let i = 0;
+  const headers = new Set(['PITCHING', 'IP', 'H', 'R', 'ER', 'BB', 'SO']);
+  while (i < lines.length && headers.has(lines[i])) i++;
+  
   while (i < lines.length) {
-    const nameLine = lines[i];
-    if (nameLine === 'TEAM') break;
-
-    // Check if next line is jersey (starts with #)
-    const nextLine = lines[i + 1] || '';
-    const jerseyMatch = nextLine.match(/^#(\d+)/);
-
+    if (lines[i] === 'TEAM') break;
+    
+    const name = lines[i];
+    i++;
+    if (i >= lines.length) break;
+    
     let jersey = '';
-    let statsStart;
-
-    if (jerseyMatch) {
-      jersey = jerseyMatch[1];
-      statsStart = i + 2;
-    } else {
-      // Try inline jersey
-      const inlineMatch = nameLine.match(/^(.+?)\s+#(\d+)/);
-      if (inlineMatch) {
-        jersey = inlineMatch[2];
-      }
-      statsStart = i + 1;
-    }
-
-    if (statsStart + 5 < lines.length) {
-      const ip = parseFloat(lines[statsStart]) || 0;
-      const h = parseInt(lines[statsStart + 1]) || 0;
-      const r = parseInt(lines[statsStart + 2]) || 0;
-      const er = parseInt(lines[statsStart + 3]) || 0;
-      const bb = parseInt(lines[statsStart + 4]) || 0;
-      const so = parseInt(lines[statsStart + 5]) || 0;
-
-      pitchers.push({ name: nameLine, jersey, ip, h, r, er, bb, so });
-      i = statsStart + 6;
+    const nextLine = lines[i];
+    
+    if (nextLine.startsWith('#')) {
+      const jMatch = nextLine.match(/^#(\d+)/);
+      if (jMatch) jersey = jMatch[1];
+      i++;
+    } else if (nextLine.startsWith('(')) {
+      // Position only
+      i++;
+    } else if (isStatNumber(nextLine)) {
+      // No jersey — stats start here
     } else {
       i++;
     }
+    
+    // Read 6 stat values: IP, H, R, ER, BB, SO
+    if (i + 5 < lines.length && isStatNumber(lines[i])) {
+      const ip = parseFloat(lines[i]) || 0;
+      const h = parseInt(lines[i + 1]) || 0;
+      const r = parseInt(lines[i + 2]) || 0;
+      const er = parseInt(lines[i + 3]) || 0;
+      const bb = parseInt(lines[i + 4]) || 0;
+      const so = parseInt(lines[i + 5]) || 0;
+      
+      pitchers.push({ name, jersey, ip, h, r, er, bb, so });
+      i += 6;
+    } else {
+      continue;
+    }
   }
-
+  
   return pitchers;
 }
 
