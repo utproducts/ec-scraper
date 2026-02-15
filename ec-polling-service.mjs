@@ -49,10 +49,11 @@ let isLoggedIn = false;
 
 async function launchBrowser() {
   if (browser) return;
-  console.log('🌐 Launching Chrome...');
+  console.log('🌐 Launching Chrome with saved session...');
   browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--window-size=1920,1080'],
+    userDataDir: './gc-browser-data'  // Reuse saved session (Premium + 2FA)
   });
   page = await browser.newPage();
   await page.setViewport({ width: 1920, height: 1080 });
@@ -60,8 +61,31 @@ async function launchBrowser() {
 
 async function loginToGC() {
   if (isLoggedIn) return;
-  console.log(`🔑 Logging in as ${GC_EMAIL}...`);
-
+  
+  // Check if saved session is still valid by going to GC home
+  console.log('🔑 Checking saved session...');
+  await page.goto('https://web.gc.com', { waitUntil: 'networkidle2', timeout: 30000 });
+  await sleep(2000);
+  
+  // Check if we're already logged in (look for user menu or account elements)
+  const isAlreadyLoggedIn = await page.evaluate(() => {
+    const body = document.body.innerText || '';
+    // If we see "Sign In" button, we're NOT logged in
+    // If we see user avatar/menu, we ARE logged in
+    const signInBtn = document.querySelector('[data-testid="desktop-sign-in-button"]');
+    return !signInBtn || signInBtn.offsetParent === null;
+  });
+  
+  if (isAlreadyLoggedIn) {
+    console.log('✅ Saved session still valid! Skipping login.');
+    isLoggedIn = true;
+    return;
+  }
+  
+  // Session expired — need to log in fresh
+  console.log('⚠️  Session expired. Logging in fresh...');
+  console.log('   NOTE: If 2FA is required, run gc-save-session.mjs again');
+  
   await page.goto('https://web.gc.com/login', { waitUntil: 'networkidle2', timeout: 30000 });
   await sleep(2000);
 
@@ -100,7 +124,49 @@ async function scrapeGame(url) {
       const home = document.querySelector('[data-testid="home-team-name"]')?.innerText?.trim() || '';
       const tables = [...document.querySelectorAll('[data-testid="data-table"]')].map(t => t.innerText);
       const legends = [...document.querySelectorAll('[data-testid="box-score-legend"] dt, [data-testid="box-score-legend"] dd')].map(el => el.innerText);
-      return { away, home, tables, legends };
+      
+      // Grab the REAL score from the page header
+      let awayScore = null;
+      let homeScore = null;
+      let status = null;
+      
+      // Direct selectors for scores
+      const awayScoreEl = document.querySelector('[data-testid="EventHeaderOngoing-awayScore"]');
+      const homeScoreEl = document.querySelector('[data-testid="EventHeaderOngoing-homeScore"]');
+      
+      if (awayScoreEl) awayScore = parseInt(awayScoreEl.innerText.trim()) || null;
+      if (homeScoreEl) homeScore = parseInt(homeScoreEl.innerText.trim()) || null;
+      
+      // Get status from header
+      const headerEl = document.querySelector('[data-testid="Event-Header-LineScoreFinal"]');
+      if (headerEl) {
+        const headerText = headerEl.innerText || '';
+        if (headerText.includes('FINAL')) status = 'final';
+      }
+      if (!status) {
+        const liveHeader = document.querySelector('[data-testid="Event-Header-LineScoreLive"]');
+        if (liveHeader) status = 'live';
+      }
+      
+      // Also grab the line score (inning by inning) and RHE
+      let lineScore = null;
+      const awayInnings = document.querySelector('[data-testid="away-row-innings"]');
+      const homeInnings = document.querySelector('[data-testid="home-row-innings"]');
+      const awayRHE = document.querySelector('[data-testid="away-row-rhe"]');
+      const homeRHE = document.querySelector('[data-testid="home-row-rhe"]');
+      const inningHeaders = document.querySelector('[data-testid="inning-header"]');
+      
+      if (awayInnings && homeInnings) {
+        lineScore = {
+          innings: inningHeaders ? inningHeaders.innerText.split('\t').map(s => s.trim()).filter(s => s) : [],
+          away: awayInnings.innerText.split('\t').map(s => s.trim()).filter(s => s),
+          home: homeInnings.innerText.split('\t').map(s => s.trim()).filter(s => s),
+          awayRHE: awayRHE ? awayRHE.innerText.split('\t').map(s => s.trim()).filter(s => s) : [],
+          homeRHE: homeRHE ? homeRHE.innerText.split('\t').map(s => s.trim()).filter(s => s) : [],
+        };
+      }
+      
+      return { away, home, tables, legends, awayScore, homeScore, headerStatus: status, lineScore };
     });
 
     if (!data.away && !data.home) {
@@ -108,7 +174,7 @@ async function scrapeGame(url) {
       return null;
     }
 
-    console.log(`  ✅ ${data.away} vs ${data.home} | ${data.tables.length} tables`);
+    console.log(`  ✅ ${data.away} vs ${data.home} | ${data.tables.length} tables | Header score: ${data.awayScore ?? '?'}-${data.homeScore ?? '?'}`);
     return data;
   } catch (err) {
     console.error(`  ❌ Scrape error: ${err.message}`);
@@ -116,39 +182,52 @@ async function scrapeGame(url) {
   }
 }
 
-// ─── PARSE STATS ─────────────────────────────────────────────
+// ─── PARSE STATS ─────────────────────────────────────────
 function parseBatting(tableText) {
   const lines = tableText.split('\n').map(l => l.trim()).filter(l => l);
   const players = [];
+  
+  // Find where headers end — headers are LINEUP, AB, R, H, RBI, BB, SO
   let i = 0;
-
-  // Skip header row (LINEUP, AB, R, H, RBI, BB, SO)
-  while (i < lines.length && !lines[i].match(/^[A-Z]\s/)) i++;
-
+  const headers = new Set(['LINEUP', 'AB', 'R', 'H', 'RBI', 'BB', 'SO']);
+  while (i < lines.length && headers.has(lines[i])) i++;
+  
+  // Now parse player rows: Name, #Jersey (Pos), then 6 stat numbers
   while (i < lines.length) {
-    const nameLine = lines[i];
-    if (nameLine === 'TEAM') break;
-
-    // Next line is jersey/position
-    const jerseyLine = lines[i + 1] || '';
-    const jerseyMatch = jerseyLine.match(/#(\d+)\s*\(?([\w/]*)\)?/);
-
-    const jersey = jerseyMatch ? jerseyMatch[1] : '';
-    const pos = jerseyMatch ? jerseyMatch[2] : '';
-
-    // Stats: AB, R, H, RBI, BB, SO
-    const statsStart = jerseyMatch ? i + 2 : i + 1;
-    const ab = parseInt(lines[statsStart]) || 0;
-    const r = parseInt(lines[statsStart + 1]) || 0;
-    const h = parseInt(lines[statsStart + 2]) || 0;
-    const rbi = parseInt(lines[statsStart + 3]) || 0;
-    const bb = parseInt(lines[statsStart + 4]) || 0;
-    const so = parseInt(lines[statsStart + 5]) || 0;
-
-    players.push({ name: nameLine, jersey, pos, ab, r, h, rbi, bb, so });
-    i = statsStart + 6;
+    if (lines[i] === 'TEAM') break;
+    
+    const name = lines[i];
+    i++;
+    
+    // Next should be jersey line like "#24 (LF)" or "#99 (3B, P)"
+    let jersey = '';
+    let pos = '';
+    if (i < lines.length && lines[i].startsWith('#')) {
+      const jLine = lines[i];
+      const jMatch = jLine.match(/^#(\d+)\s*(?:\(([^)]+)\))?/);
+      if (jMatch) {
+        jersey = jMatch[1];
+        pos = jMatch[2] || '';
+      }
+      i++;
+    }
+    
+    // Next 6 lines are stats: AB, R, H, RBI, BB, SO
+    if (i + 5 < lines.length) {
+      const ab = parseInt(lines[i]) || 0;
+      const r = parseInt(lines[i + 1]) || 0;
+      const h = parseInt(lines[i + 2]) || 0;
+      const rbi = parseInt(lines[i + 3]) || 0;
+      const bb = parseInt(lines[i + 4]) || 0;
+      const so = parseInt(lines[i + 5]) || 0;
+      
+      players.push({ name, jersey, pos, ab, r, h, rbi, bb, so });
+      i += 6;
+    } else {
+      break;
+    }
   }
-
+  
   return players;
 }
 
@@ -157,27 +236,46 @@ function parsePitching(tableText) {
   const pitchers = [];
   let i = 0;
 
-  // Skip header
-  while (i < lines.length && !lines[i].match(/^[A-Z]\s/)) i++;
+  // Skip headers: PITCHING, IP, H, R, ER, BB, SO
+  const headerKeys = ['PITCHING', 'IP', 'H', 'R', 'ER', 'BB', 'SO'];
+  while (i < lines.length && headerKeys.includes(lines[i])) i++;
 
   while (i < lines.length) {
     const nameLine = lines[i];
     if (nameLine === 'TEAM') break;
 
-    const jerseyLine = lines[i + 1] || '';
-    const jerseyMatch = jerseyLine.match(/#(\d+)/);
-    const jersey = jerseyMatch ? jerseyMatch[1] : '';
+    // Check if next line is jersey (starts with #)
+    const nextLine = lines[i + 1] || '';
+    const jerseyMatch = nextLine.match(/^#(\d+)/);
 
-    const statsStart = jerseyMatch ? i + 2 : i + 1;
-    const ip = parseFloat(lines[statsStart]) || 0;
-    const h = parseInt(lines[statsStart + 1]) || 0;
-    const r = parseInt(lines[statsStart + 2]) || 0;
-    const er = parseInt(lines[statsStart + 3]) || 0;
-    const bb = parseInt(lines[statsStart + 4]) || 0;
-    const so = parseInt(lines[statsStart + 5]) || 0;
+    let jersey = '';
+    let statsStart;
 
-    pitchers.push({ name: nameLine, jersey, ip, h, r, er, bb, so });
-    i = statsStart + 6;
+    if (jerseyMatch) {
+      jersey = jerseyMatch[1];
+      statsStart = i + 2;
+    } else {
+      // Try inline jersey
+      const inlineMatch = nameLine.match(/^(.+?)\s+#(\d+)/);
+      if (inlineMatch) {
+        jersey = inlineMatch[2];
+      }
+      statsStart = i + 1;
+    }
+
+    if (statsStart + 5 < lines.length) {
+      const ip = parseFloat(lines[statsStart]) || 0;
+      const h = parseInt(lines[statsStart + 1]) || 0;
+      const r = parseInt(lines[statsStart + 2]) || 0;
+      const er = parseInt(lines[statsStart + 3]) || 0;
+      const bb = parseInt(lines[statsStart + 4]) || 0;
+      const so = parseInt(lines[statsStart + 5]) || 0;
+
+      pitchers.push({ name: nameLine, jersey, ip, h, r, er, bb, so });
+      i = statsStart + 6;
+    } else {
+      i++;
+    }
   }
 
   return pitchers;
@@ -250,19 +348,25 @@ async function saveGameToSupabase(url, scrapedData) {
     return null;
   }
 
-  const awayBatting = parseBatting(tables[0]);
+  console.log("  🔎 TABLE 0 RAW (first 500):", tables[0].substring(0, 500)); const awayBatting = parseBatting(tables[0]);
   const awayPitching = parsePitching(tables[1]);
-  const homeBatting = parseBatting(tables[2]);
+  console.log("  🔎 TABLE 2 RAW:", tables[2]); const homeBatting = parseBatting(tables[2]);
   const homePitching = parsePitching(tables[3]);
+  
+  console.log(`  📋 Parsed: ${awayBatting.length} away batters, ${awayPitching.length} away pitchers, ${homeBatting.length} home batters, ${homePitching.length} home pitchers`);
+  if (awayBatting.length > 0) console.log(`  👤 First batter: ${awayBatting[0].name} #${awayBatting[0].jersey}`);
 
-  // Calculate scores from batting
-  const awayScore = awayBatting.reduce((s, p) => s + p.r, 0);
-  const homeScore = homeBatting.reduce((s, p) => s + p.r, 0);
+  // Use header score if available, otherwise calculate from batting
+  const awayScore = scrapedData.awayScore !== null ? scrapedData.awayScore : awayBatting.reduce((s, p) => s + p.r, 0);
+  const homeScore = scrapedData.homeScore !== null ? scrapedData.homeScore : homeBatting.reduce((s, p) => s + p.r, 0);
 
-  // Determine status — if pitching IP adds up to a complete game, it's final
-  const awayIP = awayPitching.reduce((s, p) => s + p.ip, 0);
-  const homeIP = homePitching.reduce((s, p) => s + p.ip, 0);
-  const status = (awayIP >= 4 && homeIP >= 4) ? 'final' : 'live';
+  // Use header status if available, otherwise determine from pitching IP
+  let status = scrapedData.headerStatus || null;
+  if (!status) {
+    const awayIP = awayPitching.reduce((s, p) => s + p.ip, 0);
+    const homeIP = homePitching.reduce((s, p) => s + p.ip, 0);
+    status = (awayIP >= 4 && homeIP >= 4) ? 'final' : 'live';
+  }
 
   // Find or create teams
   const awayTeamId = await findOrCreateTeam(away);
