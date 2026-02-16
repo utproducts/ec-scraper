@@ -478,10 +478,39 @@ app.post('/api/sms/webhook', async (req, res) => {
 
       // STEP 1: Try to match by phone number to a known coach
       const cleanPhone = From.replace(/\D/g, '').slice(-10);
-      const { data: matchedTeams } = await supabase
+      
+      // Search ec_teams FIRST (where CSV-uploaded teams live)
+      const { data: ecTeamsMatch } = await supabase
+        .from('ec_teams')
+        .select('id, team_name, coach_phone, age_group');
+      const { data: ecEventTeams } = await supabase
+        .from('ec_event_teams')
+        .select('team_id, event_id, age_group');
+      
+      // Also search legacy teams table as fallback
+      const { data: legacyTeams } = await supabase
         .from('teams')
         .select('id, name, age_group, event_id, coach_phone')
         .order('created_at', { ascending: false });
+      
+      // Build combined search list
+      const allSearchTeams = [];
+      (ecTeamsMatch || []).forEach(t => {
+        const etLink = (ecEventTeams || []).find(et => et.team_id === t.id);
+        allSearchTeams.push({
+          id: t.id, name: t.team_name, coach_phone: t.coach_phone,
+          age_group: etLink?.age_group || t.age_group || '',
+          event_id: etLink?.event_id || '', source: 'ec_teams'
+        });
+      });
+      (legacyTeams || []).forEach(t => {
+        allSearchTeams.push({
+          id: t.id, name: t.name, coach_phone: t.coach_phone,
+          age_group: t.age_group || '', event_id: t.event_id || '', source: 'teams'
+        });
+      });
+      
+      const matchedTeams = allSearchTeams;
       
       if (matchedTeams) {
         const phoneMatch = matchedTeams.find(t => {
@@ -496,6 +525,16 @@ app.post('/api/sms/webhook', async (req, res) => {
           matchedEventId = phoneMatch.event_id;
           gcStatus = 'matched';
           console.log(`🔗 Auto-matched GC link by phone to team: ${phoneMatch.name} (${phoneMatch.age_group})`);
+          
+          // ALSO update ec_teams.gc_team_id so the scraper can use this link
+          if (phoneMatch.source === 'ec_teams') {
+            const { error: ecUpdateErr } = await supabase.from('ec_teams').update({
+              gc_team_id: gcTeamId,
+              gc_team_link: gcUrl
+            }).eq('id', phoneMatch.id);
+            if (ecUpdateErr) console.error('ec_teams GC update error:', ecUpdateErr.message);
+            else console.log(`✅ Updated ec_teams.gc_team_id for ${phoneMatch.name}`);
+          }
         }
       }
 
@@ -515,11 +554,17 @@ app.post('/api/sms/webhook', async (req, res) => {
           // Check both our responses and campaign messages for event names
           const recentMessages = lastOutbound.map(m => `${m.question || ''} ${m.response || ''}`).join(' ');
           
-          // Try to match event name from conversation
+          // Try to match event name from conversation — check ec_events first, then legacy events
+          const { data: ecEvents } = await supabase.from('ec_events').select('id, name, event_name');
           const { data: allEvents } = await supabase.from('events').select('id, name');
-          if (allEvents) {
-            for (const event of allEvents) {
-              if (recentMessages.toLowerCase().includes(event.name.toLowerCase())) {
+          const combinedEvents = [
+            ...(ecEvents || []).map(e => ({ id: e.id, name: e.name || e.event_name, source: 'ec_events' })),
+            ...(allEvents || []).map(e => ({ id: e.id, name: e.name, source: 'events' }))
+          ];
+          
+          if (combinedEvents.length > 0) {
+            for (const event of combinedEvents) {
+              if (event.name && recentMessages.toLowerCase().includes(event.name.toLowerCase())) {
                 matchedEventId = event.id;
                 console.log(`📌 Matched to event "${event.name}" from conversation context`);
                 
