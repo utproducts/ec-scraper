@@ -1319,7 +1319,7 @@ console.log('✅ Event Central API routes loaded');
 
 // All-Tournament Team shareable graphic
 app.get('/ec/all-tournament', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'all-tournament.html'));
+  res.sendFile(__dirname + '/frontend/all-tournament.html');
 });
 
 app.listen(PORT, () => {
