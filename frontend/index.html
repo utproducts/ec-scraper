@@ -158,6 +158,12 @@
     .loading { text-align: center; padding: 60px; color: #475569; }
     .section-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
     .footer { border-top: 1px solid rgba(255,255,255,0.04); padding: 16px 20px; text-align: center; font-size: 10px; color: #334155; text-transform: uppercase; letter-spacing: 2px; }
+    
+    /* Player Card Download */
+    .dl-icon { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); color: #f59e0b; font-size: 12px; vertical-align: middle; margin-left: 6px; transition: all 0.2s; }
+    .dl-icon:hover { background: rgba(245,158,11,0.25); transform: scale(1.1); }
+    .dl-icon svg { width: 14px; height: 14px; fill: currentColor; }
+    #playerCardCanvas { display: none; }
     .empty { text-align: center; padding: 60px; color: #475569; }
   </style>
 </head>
@@ -229,6 +235,7 @@
   </main>
 
   <footer class="footer fc">Powered by USSSA Event Central • Stats via GameChanger</footer>
+  <canvas id="playerCardCanvas" width="1080" height="1350"></canvas>
 
   <script>
     const API_BASE = window.location.origin;
@@ -300,6 +307,250 @@
         renderLeaderboard();
       });
     });
+
+    // ─── DOWNLOAD ICON SVG ────────────────
+    const DL_SVG = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 4h14v-2H5v2z"/></svg>';
+    function dlBtn(name, jersey, team, highlights, score, type) {
+      const data = JSON.stringify({name,jersey,team,highlights,score,type}).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      return `<span class="dl-icon" onclick='generatePlayerCard(${data})' title="Download Player Card">${DL_SVG}</span>`;
+    }
+
+    // ─── PLAYER CARD GENERATOR ──────────────
+    function generatePlayerCard(p) {
+      const canvas = document.getElementById('playerCardCanvas');
+      const ctx = canvas.getContext('2d');
+      const W = 1080, H = 1350;
+      canvas.width = W;
+      canvas.height = H;
+
+      // Background
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#020a18');
+      bg.addColorStop(0.4, '#0a1832');
+      bg.addColorStop(0.7, '#12204a');
+      bg.addColorStop(1, '#050e1e');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      // Subtle diagonal lines
+      ctx.save();
+      ctx.globalAlpha = 0.03;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      for (let i = -H; i < W + H; i += 60) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + H, H);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Gold accent bar at top
+      const topGrad = ctx.createLinearGradient(0, 0, W, 0);
+      topGrad.addColorStop(0, '#b45309');
+      topGrad.addColorStop(0.5, '#f59e0b');
+      topGrad.addColorStop(1, '#b45309');
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, 0, W, 6);
+
+      // Corner accents
+      ctx.strokeStyle = 'rgba(245,158,11,0.2)';
+      ctx.lineWidth = 2;
+      [[40,40,1],[W-40,40,2],[40,H-40,3],[W-40,H-40,4]].forEach(([x,y,c]) => {
+        ctx.beginPath();
+        const s = 50;
+        if(c===1){ctx.moveTo(x,y+s);ctx.lineTo(x,y);ctx.lineTo(x+s,y);}
+        if(c===2){ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);}
+        if(c===3){ctx.moveTo(x,y-s);ctx.lineTo(x,y);ctx.lineTo(x+s,y);}
+        if(c===4){ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y-s);}
+        ctx.stroke();
+      });
+
+      // USSSA badge
+      ctx.fillStyle = '#cc0000';
+      ctx.beginPath();
+      ctx.roundRect(40, 40, 120, 40, 8);
+      ctx.fill();
+      ctx.font = '900 18px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText('USSSA', 100, 67);
+      ctx.font = '700 16px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.textAlign = 'left';
+      ctx.fillText('EVENT CENTRAL', 180, 67);
+
+      // Type label (POTG / All-Tournament / Leaderboard)
+      const typeLabel = p.type === 'potg' ? '⭐ PLAYER OF THE GAME' : p.type === 'att' ? '⭐ ALL-TOURNAMENT TEAM' : '🏆 TOURNAMENT LEADER';
+      ctx.font = '700 22px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#f59e0b';
+      ctx.textAlign = 'center';
+      ctx.fillText(typeLabel, W/2, 160);
+
+      // Gold divider
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      const divGrad = ctx.createLinearGradient(100, 0, W-100, 0);
+      divGrad.addColorStop(0, 'transparent');
+      divGrad.addColorStop(0.3, '#f59e0b');
+      divGrad.addColorStop(0.7, '#f59e0b');
+      divGrad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = divGrad;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(100, 185);
+      ctx.lineTo(W-100, 185);
+      ctx.stroke();
+      ctx.restore();
+
+      // Jersey circle
+      ctx.beginPath();
+      ctx.arc(W/2, 320, 100, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(245,158,11,0.08)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(245,158,11,0.3)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Jersey number
+      ctx.font = '900 72px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#f59e0b';
+      ctx.textAlign = 'center';
+      ctx.fillText('#' + (p.jersey || ''), W/2, 345);
+
+      // Player name
+      ctx.font = '900 64px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText((p.name || '').toUpperCase(), W/2, 500);
+
+      // Team name
+      ctx.font = '600 26px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(p.team || '', W/2, 545);
+
+      // Score badge
+      if (p.score) {
+        ctx.beginPath();
+        ctx.arc(W/2, 650, 55, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245,158,11,0.1)';
+        ctx.fill();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.font = '800 36px "Barlow Condensed", sans-serif';
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillText(p.score, W/2, 662);
+        ctx.font = '600 12px "Barlow Condensed", sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('PERFORMANCE SCORE', W/2, 690);
+      }
+
+      // Stats highlights box
+      const hlY = 750;
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.beginPath();
+      ctx.roundRect(80, hlY, W-160, 120, 16);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Split highlights into batting | pitching
+      const hlParts = (p.highlights || '').split(' | ');
+      ctx.font = '700 28px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#e2e8f0';
+      ctx.textAlign = 'center';
+      
+      if (hlParts.length > 1) {
+        ctx.fillText('🏏  ' + hlParts[0], W/2, hlY + 45);
+        ctx.fillText('⚾  ' + hlParts[1], W/2, hlY + 85);
+      } else {
+        ctx.fillText(p.highlights || '', W/2, hlY + 65);
+      }
+
+      // Individual stat boxes
+      const stats = parseHighlights(p.highlights || '');
+      if (stats.length > 0) {
+        const boxW = 140;
+        const totalW = stats.length * boxW + (stats.length - 1) * 12;
+        let startX = (W - totalW) / 2;
+        const statY = 920;
+
+        stats.forEach((s, i) => {
+          const bx = startX + i * (boxW + 12);
+          ctx.fillStyle = 'rgba(255,255,255,0.03)';
+          ctx.beginPath();
+          ctx.roundRect(bx, statY, boxW, 100, 12);
+          ctx.fill();
+
+          ctx.font = '800 36px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.fillText(s.val, bx + boxW/2, statY + 45);
+
+          ctx.font = '600 14px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText(s.label, bx + boxW/2, statY + 72);
+        });
+      }
+
+      // Event name
+      ctx.font = '600 22px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#475569';
+      ctx.textAlign = 'center';
+      ctx.fillText('Space Coast Presidents Day • ' + (currentAge || '11U'), W/2, 1120);
+
+      // Date
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      ctx.font = '500 18px "Barlow", sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.fillText(dateStr, W/2, 1155);
+
+      // Footer
+      ctx.font = '600 14px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('POWERED BY USSSA EVENT CENTRAL • STATS VIA GAMECHANGER', W/2, H - 50);
+
+      // Gold bottom bar
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, H - 6, W, 6);
+
+      // Download
+      const link = document.createElement('a');
+      link.download = `${(p.name||'Player').replace(/\s/g,'-')}-${currentAge}-PlayerCard.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Parse highlights string into stat boxes
+    function parseHighlights(hl) {
+      const stats = [];
+      // Batting: "3-for-8 (0.375), 3 RBI, 2 R"
+      const abMatch = hl.match(/(\d+)-for-(\d+)/);
+      if (abMatch) stats.push({ val: abMatch[1] + '-' + abMatch[2], label: 'H-AB' });
+      
+      const avgMatch = hl.match(/\(([0-9.]+)\)/);
+      if (avgMatch) stats.push({ val: avgMatch[1], label: 'AVG' });
+
+      const rbiMatch = hl.match(/(\d+)\s*RBI/);
+      if (rbiMatch) stats.push({ val: rbiMatch[1], label: 'RBI' });
+
+      const rMatch = hl.match(/(\d+)\s*R(?:\s|,|$|\|)/);
+      if (rMatch) stats.push({ val: rMatch[1], label: 'RUNS' });
+
+      // Pitching: "5 IP, 6 K"
+      const ipMatch = hl.match(/([\d.]+)\s*IP/);
+      if (ipMatch) stats.push({ val: ipMatch[1], label: 'IP' });
+
+      const kMatch = hl.match(/(\d+)\s*K/);
+      if (kMatch) stats.push({ val: kMatch[1], label: 'K' });
+
+      return stats.slice(0, 6);
+    }
+      if (!val || val === 0) return `<td class="fc stat-zero">0</td>`;
+      return `<td class="fc ${cls}">${val}</td>`;
+    }
 
     // ─── HELPERS ────────────────────────────
     function sc(val, cls) {
@@ -496,7 +747,7 @@
         data.forEach((row, i) => {
           html += `<tr>
             <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
-            <td><div class="lb-player-name">${row.name}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
+            <td><div class="lb-player-name">${row.name} ${dlBtn(row.name, row.jersey, row.team, row.avg + ' AVG, ' + row.h + ' H, ' + row.rbi + ' RBI, ' + row.r + ' R', '', 'lb')}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
             <td class="fc lb-highlight">${row.avg}</td>
             <td>${row.games}</td><td>${row.ab}</td><td>${row.h}</td>
             <td>${row.rbi}</td><td>${row.r}</td><td>${row.bb}</td><td>${row.so}</td>
@@ -513,7 +764,7 @@
         data.forEach((row, i) => {
           html += `<tr>
             <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
-            <td><div class="lb-player-name">${row.name}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
+            <td><div class="lb-player-name">${row.name} ${dlBtn(row.name, row.jersey, row.team, row.era + ' ERA, ' + row.ip + ' IP, ' + row.so + ' K', '', 'lb')}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
             <td class="fc lb-highlight">${row.era}</td>
             <td>${row.games}</td><td>${row.ip}</td><td>${row.so}</td>
             <td>${row.bb}</td><td>${row.whip}</td><td>${row.h}</td><td>${row.er}</td>
@@ -549,8 +800,8 @@
         const pJersey = p.player?.jersey_number || p.jersey || '';
         const pTeam = p.team?.team_name || p.team || '';
         const pHighlights = p.highlights || '';
-        const pGame = p.game || '';
-        
+        const pGame = typeof p.game === 'string' ? p.game : '';
+
         const scoreColor = pScore >= 20 ? '#f59e0b' : pScore >= 10 ? '#94a3b8' : '#475569';
         const borderColor = pScore >= 20 ? 'rgba(245,158,11,0.4)' : 'rgba(148,163,184,0.2)';
 
@@ -559,7 +810,7 @@
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
               <div>
                 <div class="potg-label fc" style="color:#f59e0b;">⭐ Player of the Game</div>
-                <div class="potg-name fc">${pName}</div>
+                <div class="potg-name fc">${pName} ${dlBtn(pName, pJersey, pTeam, pHighlights, pScore, 'potg')}</div>
                 <div class="potg-info">#${pJersey} •• ${pTeam}</div>
               </div>
               <div class="potg-score-circle fc" style="border: 2px solid ${scoreColor}; color: ${scoreColor};">
@@ -601,7 +852,7 @@
           <div class="att-card">
             <div class="att-rank fc ${rankClass}">${i + 1}</div>
             <div class="att-info">
-              <div class="att-name fc">${p.name}</div>
+              <div class="att-name fc">${p.name} ${dlBtn(p.name, p.jersey, p.team, p.highlights, p.score, 'att')}</div>
               <div class="att-team">#${p.jersey} • ${p.team} • ${p.games} GP</div>
               <div class="att-stats">${p.highlights}</div>
             </div>
