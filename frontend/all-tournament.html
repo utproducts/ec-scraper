@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All-Tournament Team — USSSA Event Central</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #050d1a; color: #e2e8f0; font-family: 'Barlow', sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+    .fc { font-family: 'Barlow Condensed', sans-serif; }
+    
+    .controls { margin-bottom: 30px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .ctrl-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 20px; cursor: pointer; color: #94a3b8; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; transition: all 0.2s; font-family: 'Barlow Condensed', sans-serif; }
+    .ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+    .ctrl-btn.active { background: linear-gradient(135deg, #cc0000, #990000); border-color: transparent; color: #fff; }
+    .download-btn { background: linear-gradient(135deg, #f59e0b, #d97706); border: none; border-radius: 8px; padding: 12px 28px; cursor: pointer; color: #000; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; transition: all 0.2s; font-family: 'Barlow Condensed', sans-serif; }
+    .download-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,158,11,0.4); }
+    
+    .card-container { position: relative; }
+    
+    canvas { border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+    
+    .loading { color: #64748b; font-size: 14px; padding: 60px; }
+    
+    .share-hint { margin-top: 20px; font-size: 12px; color: #475569; text-align: center; text-transform: uppercase; letter-spacing: 1.5px; }
+  </style>
+</head>
+<body>
+
+  <div class="controls">
+    <div id="ageButtons"></div>
+    <button class="download-btn fc" onclick="downloadImage()">⬇ Download Image</button>
+  </div>
+  
+  <div class="card-container">
+    <canvas id="card" width="1080" height="1920"></canvas>
+  </div>
+  
+  <div class="share-hint fc">Long press or right-click to save • Share on social media</div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let currentAge = '11U';
+    let teamData = null;
+
+    // Load age groups
+    async function loadAgeGroups() {
+      try {
+        const res = await fetch(API_BASE + '/api/ec/age-groups');
+        const data = await res.json();
+        const bar = document.getElementById('ageButtons');
+        bar.innerHTML = (data.age_groups || []).map(ag => 
+          `<button class="ctrl-btn fc ${ag.age_group === currentAge ? 'active' : ''}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`
+        ).join('');
+      } catch(e) {}
+    }
+
+    function setAge(age) {
+      currentAge = age;
+      document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.toggle('active', b.textContent === age));
+      loadAndRender();
+    }
+
+    async function loadAndRender() {
+      try {
+        const res = await fetch(API_BASE + `/api/ec/all-tournament?age_group=${currentAge}&min_ab=5&min_ip=5`);
+        teamData = await res.json();
+        renderCard();
+      } catch(e) {
+        console.error(e);
+      }
+    }
+
+    function renderCard() {
+      const canvas = document.getElementById('card');
+      const ctx = canvas.getContext('2d');
+      const W = 1080;
+      const H = 1920;
+      canvas.width = W;
+      canvas.height = H;
+
+      const players = teamData?.team || [];
+      const ageGroup = teamData?.ageGroup || currentAge;
+      const eventName = teamData?.eventName || 'Space Coast Presidents Day';
+
+      // ─── BACKGROUND ───
+      // Deep navy gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+      bgGrad.addColorStop(0, '#020a18');
+      bgGrad.addColorStop(0.3, '#071428');
+      bgGrad.addColorStop(0.7, '#0a1a35');
+      bgGrad.addColorStop(1, '#050e1e');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Subtle geometric pattern overlay
+      ctx.save();
+      ctx.globalAlpha = 0.03;
+      for (let i = 0; i < 20; i++) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, i * 100 + 50);
+        ctx.lineTo(W, i * 100 + 50);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Gold accent lines
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      const goldGrad = ctx.createLinearGradient(0, 0, W, 0);
+      goldGrad.addColorStop(0, 'transparent');
+      goldGrad.addColorStop(0.3, '#f59e0b');
+      goldGrad.addColorStop(0.7, '#f59e0b');
+      goldGrad.addColorStop(1, 'transparent');
+      ctx.strokeStyle = goldGrad;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 280);
+      ctx.lineTo(W, 280);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, H - 140);
+      ctx.lineTo(W, H - 140);
+      ctx.stroke();
+      ctx.restore();
+
+      // Corner accents
+      drawCornerAccent(ctx, 30, 30, 60, 1);
+      drawCornerAccent(ctx, W - 30, 30, 60, 2);
+      drawCornerAccent(ctx, 30, H - 30, 60, 3);
+      drawCornerAccent(ctx, W - 30, H - 30, 60, 4);
+
+      // ─── HEADER ───
+      // USSSA badge
+      ctx.fillStyle = '#cc0000';
+      roundRect(ctx, 40, 40, 120, 40, 8);
+      ctx.fill();
+      ctx.font = '900 18px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText('USSSA', 100, 67);
+
+      // Event Central label
+      ctx.font = '700 18px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.textAlign = 'left';
+      ctx.fillText('EVENT CENTRAL', 180, 67);
+
+      // Star icon area
+      ctx.font = '60px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('⭐', W / 2, 160);
+
+      // Title
+      ctx.font = '900 52px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#f59e0b';
+      ctx.textAlign = 'center';
+      ctx.fillText('ALL-TOURNAMENT TEAM', W / 2, 220);
+
+      // Event name + age
+      ctx.font = '600 24px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`${eventName} • ${ageGroup}`, W / 2, 256);
+
+      // ─── PLAYERS ───
+      const startY = 310;
+      const rowH = 98;
+      const maxPlayers = Math.min(players.length, 15);
+
+      for (let i = 0; i < maxPlayers; i++) {
+        const p = players[i];
+        const y = startY + (i * rowH);
+        
+        // Row background
+        if (i < 3) {
+          // Top 3 get special treatment
+          const rowGrad = ctx.createLinearGradient(40, y, W - 40, y);
+          if (i === 0) {
+            rowGrad.addColorStop(0, 'rgba(245, 158, 11, 0.15)');
+            rowGrad.addColorStop(1, 'rgba(245, 158, 11, 0.02)');
+          } else if (i === 1) {
+            rowGrad.addColorStop(0, 'rgba(148, 163, 184, 0.12)');
+            rowGrad.addColorStop(1, 'rgba(148, 163, 184, 0.02)');
+          } else {
+            rowGrad.addColorStop(0, 'rgba(180, 83, 9, 0.12)');
+            rowGrad.addColorStop(1, 'rgba(180, 83, 9, 0.02)');
+          }
+          ctx.fillStyle = rowGrad;
+          roundRect(ctx, 40, y, W - 80, rowH - 8, 12);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.01)';
+          roundRect(ctx, 40, y, W - 80, rowH - 8, 8);
+          ctx.fill();
+        }
+
+        // Rank number
+        const rankX = 85;
+        if (i === 0) {
+          ctx.font = '900 36px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#f59e0b';
+        } else if (i === 1) {
+          ctx.font = '900 36px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#94a3b8';
+        } else if (i === 2) {
+          ctx.font = '900 36px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#b45309';
+        } else {
+          ctx.font = '800 28px "Barlow Condensed", sans-serif';
+          ctx.fillStyle = '#334155';
+        }
+        ctx.textAlign = 'center';
+        ctx.fillText(i + 1, rankX, y + (rowH / 2) + 4);
+
+        // Player name
+        ctx.font = '800 28px "Barlow Condensed", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText((p.name || '').toUpperCase(), 130, y + 32);
+
+        // Team + jersey
+        ctx.font = '500 16px "Barlow", sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText(`#${p.jersey || '—'} • ${p.team || ''}`, 130, y + 56);
+
+        // Stats highlights
+        ctx.font = '600 15px "Barlow", sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        const highlights = p.highlights || '';
+        // Truncate if too long
+        const maxHL = 50;
+        const hlText = highlights.length > maxHL ? highlights.substring(0, maxHL) + '...' : highlights;
+        ctx.fillText(hlText, 130, y + 78);
+
+        // Score badge
+        const scoreX = W - 100;
+        const scoreY = y + (rowH / 2) - 18;
+        const scoreSize = i < 3 ? 36 : 32;
+        
+        // Score circle
+        ctx.beginPath();
+        ctx.arc(scoreX, scoreY + 10, 24, 0, Math.PI * 2);
+        if (i === 0) {
+          ctx.strokeStyle = '#f59e0b';
+          ctx.fillStyle = 'rgba(245,158,11,0.1)';
+        } else if (i < 3) {
+          ctx.strokeStyle = '#94a3b8';
+          ctx.fillStyle = 'rgba(148,163,184,0.05)';
+        } else {
+          ctx.strokeStyle = '#1e293b';
+          ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        }
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = `800 ${i < 3 ? 18 : 16}px "Barlow Condensed", sans-serif`;
+        ctx.fillStyle = i === 0 ? '#f59e0b' : i < 3 ? '#94a3b8' : '#475569';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.score || 0, scoreX, scoreY + 16);
+      }
+
+      // ─── FOOTER ───
+      const footY = H - 100;
+      
+      // Powered by line
+      ctx.font = '600 14px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.textAlign = 'center';
+      ctx.fillText('POWERED BY', W / 2, footY);
+
+      ctx.font = '800 22px "Barlow Condensed", sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('USSSA EVENT CENTRAL', W / 2, footY + 28);
+
+      ctx.font = '500 13px "Barlow", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('Stats via GameChanger • eventcentral.usssa.com', W / 2, footY + 52);
+
+      // Date
+      const today = new Date();
+      const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      ctx.font = '500 13px "Barlow", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText(dateStr, W / 2, footY + 72);
+    }
+
+    // Helper: rounded rectangle
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // Helper: corner accent
+    function drawCornerAccent(ctx, x, y, size, corner) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.15)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      switch(corner) {
+        case 1: // top-left
+          ctx.moveTo(x, y + size);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x + size, y);
+          break;
+        case 2: // top-right
+          ctx.moveTo(x - size, y);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x, y + size);
+          break;
+        case 3: // bottom-left
+          ctx.moveTo(x, y - size);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x + size, y);
+          break;
+        case 4: // bottom-right
+          ctx.moveTo(x - size, y);
+          ctx.lineTo(x, y);
+          ctx.lineTo(x, y - size);
+          break;
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Download
+    function downloadImage() {
+      const canvas = document.getElementById('card');
+      const link = document.createElement('a');
+      link.download = `All-Tournament-Team-${currentAge}-${teamData?.eventName || 'Event'}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Init
+    async function init() {
+      await loadAgeGroups();
+      await loadAndRender();
+    }
+
+    init();
+  </script>
+</body>
+</html>

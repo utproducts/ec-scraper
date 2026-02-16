@@ -1315,6 +1315,12 @@ console.log('✅ Event Central API routes loaded');
 
 
 // Start server
+
+// All-Tournament Team shareable graphic
+app.get('/ec/all-tournament', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'all-tournament.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Unrivaled Connect server running on port ${PORT}`);
   console.log(`📱 Twilio configured for: ${process.env.TWILIO_ACCOUNT_SID}`);
