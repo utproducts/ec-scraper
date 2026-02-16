@@ -684,6 +684,10 @@ function readTeamConfig() {
   }
 }
 
+// ─── AUTO-STOP CONFIG ────────────────────────────────────────
+const AUTO_STOP_DELAY = 60; // minutes after all games final to stop polling
+let allGamesFinalSince = null; // timestamp when we first detected all games final
+
 // ─── MAIN POLLING LOOP ──────────────────────────────────────
 
 async function pollOnce(teams) {
@@ -694,6 +698,7 @@ async function pollOnce(teams) {
 
   let totalGames = 0;
   let newGames = 0;
+  let liveOrUpcoming = 0;
 
   for (const team of teams) {
     console.log(`\n📋 ${team.ageGroup} | ${team.eventName}`);
@@ -705,11 +710,29 @@ async function pollOnce(teams) {
     
     for (const game of games) {
       totalGames++;
+      
+      // ─── SKIP IF ALREADY FINAL IN DB ─────────────────────
+      const gcIdMatch = game.url.match(/schedule\/([a-f0-9-]+)\//);
+      const gcGameId = gcIdMatch ? gcIdMatch[1] : null;
+      if (gcGameId) {
+        const { data: existingGame } = await supabase
+          .from('ec_games')
+          .select('id, status')
+          .eq('gc_game_id', gcGameId)
+          .single();
+        if (existingGame && existingGame.status === 'final') {
+          console.log(`  ✅ Already final in DB, skipping: ${game.text.substring(0, 60)}...`);
+          continue;
+        }
+      }
+      // ─── END SKIP CHECK ──────────────────────────────────
+      
       console.log(`\n  📊 Scraping: ${game.text.substring(0, 80)}...`);
       
       const data = await scrapeGame(game.url);
       if (!data || data.tables.length < 4) {
         console.log(`  ⏭️  Skipping — no box score data yet`);
+        liveOrUpcoming++; // No data = game hasn't happened or is in progress
         continue;
       }
       
@@ -735,6 +758,11 @@ async function pollOnce(teams) {
         }
       }
       
+      // Track non-final games
+      if (data.headerStatus !== 'final') {
+        liveOrUpcoming++;
+      }
+      
       const score = `${data.away} ${data.awayScore ?? '?'}, ${data.home} ${data.homeScore ?? '?'}`;
       const statusIcon = data.headerStatus === 'live' ? '🔴' : data.headerStatus === 'final' ? '✅' : '⏳';
       console.log(`  ${statusIcon} ${score} (${data.headerStatus || 'unknown'})`);
@@ -746,44 +774,79 @@ async function pollOnce(teams) {
     }
   }
 
+  // ─── AUTO-STOP CHECK ───────────────────────────────────────
+  if (totalGames > 0 && liveOrUpcoming === 0) {
+    if (!allGamesFinalSince) {
+      allGamesFinalSince = Date.now();
+      console.log(`\n🏁 All ${totalGames} games are FINAL. Auto-stop timer started (${AUTO_STOP_DELAY} min).`);
+    } else {
+      const minutesSinceFinal = Math.round((Date.now() - allGamesFinalSince) / 60000);
+      console.log(`\n🏁 All games still final. ${minutesSinceFinal}/${AUTO_STOP_DELAY} min until auto-stop.`);
+    }
+  } else {
+    if (allGamesFinalSince) {
+      console.log(`\n🔄 Games still in progress — auto-stop timer reset.`);
+    }
+    allGamesFinalSince = null; // Reset if any game is still live/upcoming
+  }
+
   console.log(`\n${'─'.repeat(60)}`);
-  console.log(`✅ Cycle complete: ${totalGames} games found, ${newGames} scraped`);
+  console.log(`✅ Cycle complete: ${totalGames} games found, ${newGames} scraped, ${liveOrUpcoming} still live/upcoming`);
   console.log(`   Next scrape in ${POLL_INTERVAL} minutes.\n`);
+  
+  return { totalGames, newGames, liveOrUpcoming };
 }
 
-async function run() {
-  const teams = readTeamConfig();
-  console.log(`\n📋 Loaded ${teams.length} teams from ec-teams.txt\n`);
-  teams.forEach(t => console.log(`   ${t.ageGroup} | ${t.eventName} | ${t.startDate || 'no date'}-${t.endDate || 'no date'} | ${t.url}`));
+// ─── EXPORTED FOR SERVICE WRAPPER ────────────────────────────
+export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig, allGamesFinalSince, AUTO_STOP_DELAY };
 
-  await launchBrowser();
-  await checkLogin();
-  
-  // First cycle
-  await pollOnce(teams);
+// ─── STANDALONE MODE (run directly) ──────────────────────────
+const isMainModule = process.argv[1] && (
+  process.argv[1].endsWith('ec-polling-v2.mjs') || 
+  process.argv[1].includes('ec-polling-v2')
+);
 
-  // Loop
-  console.log(`⏰ Polling every ${POLL_INTERVAL} minutes. Press Ctrl+C to stop.\n`);
+if (isMainModule) {
+  (async () => {
+    const teams = readTeamConfig();
+    console.log(`\n📋 Loaded ${teams.length} teams from ec-teams.txt\n`);
+    teams.forEach(t => console.log(`   ${t.ageGroup} | ${t.eventName} | ${t.startDate || 'no date'}-${t.endDate || 'no date'} | ${t.url}`));
 
-  const interval = setInterval(async () => {
-    try {
-      const freshTeams = readTeamConfig(); // Re-read in case file changed
-      await pollOnce(freshTeams);
-    } catch (err) {
-      console.error('❌ Poll cycle error:', err.message);
-    }
-  }, POLL_INTERVAL * 60 * 1000);
+    await launchBrowser();
+    await checkLogin();
+    
+    // First cycle
+    await pollOnce(teams);
 
-  process.on('SIGINT', async () => {
-    console.log('\n\n🛑 Shutting down...');
-    clearInterval(interval);
-    await closeBrowser();
-    process.exit(0);
+    // Loop with auto-stop
+    console.log(`⏰ Polling every ${POLL_INTERVAL} minutes. Auto-stops ${AUTO_STOP_DELAY} min after all games final.\n`);
+
+    const interval = setInterval(async () => {
+      try {
+        // Check auto-stop before next cycle
+        if (allGamesFinalSince && (Date.now() - allGamesFinalSince) >= AUTO_STOP_DELAY * 60000) {
+          console.log(`\n🛑 AUTO-STOP: All games have been final for ${AUTO_STOP_DELAY}+ minutes. Shutting down.`);
+          clearInterval(interval);
+          await closeBrowser();
+          process.exit(0);
+        }
+        
+        const freshTeams = readTeamConfig();
+        await pollOnce(freshTeams);
+      } catch (err) {
+        console.error('❌ Poll cycle error:', err.message);
+      }
+    }, POLL_INTERVAL * 60 * 1000);
+
+    process.on('SIGINT', async () => {
+      console.log('\n\n🛑 Shutting down...');
+      clearInterval(interval);
+      await closeBrowser();
+      process.exit(0);
+    });
+  })().catch(err => {
+    console.error('Fatal error:', err);
+    closeBrowser();
+    process.exit(1);
   });
 }
-
-run().catch(err => {
-  console.error('Fatal error:', err);
-  closeBrowser();
-  process.exit(1);
-});
