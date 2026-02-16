@@ -297,7 +297,7 @@ async function discoverGames(teamUrl, startDate, endDate) {
 async function scrapeGame(url) {
   try {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-    await sleep(3000);
+    await sleep(6000);
 
     const rawData = await page.evaluate(() => {
       const away = document.querySelector('[data-testid="away-team-name"]')?.innerText?.trim() || '';
@@ -401,52 +401,79 @@ async function findOrCreatePlayer(playerName, jersey, teamId) {
 async function saveGame(url, data, ageGroup, eventName) {
   const { away, home, tables, awayScore, homeScore, headerStatus, gameTime } = data;
   
-  // ─── DEDUP CHECK: Skip if game between same teams already exists ───
-  // Look up team IDs for away and home
-  const { data: awayTeamRow } = await supabase.from('ec_teams').select('id').eq('team_name', away).single();
-  const { data: homeTeamRow } = await supabase.from('ec_teams').select('id').eq('team_name', home).single();
+  // ─── DEDUP CHECK: Skip if game already exists (by gc_game_id) ───
+  const gcGameMatchDedup = url.match(/schedule\/([a-f0-9-]+)\//);
+  const gcGameIdDedup = gcGameMatchDedup ? gcGameMatchDedup[1] : null;
   
-  if (awayTeamRow && homeTeamRow) {
-    // Check both directions: A vs B or B vs A
-    const { data: existingGame1 } = await supabase.from('ec_games')
-      .select('id')
-      .eq('away_team_id', awayTeamRow.id)
-      .eq('home_team_id', homeTeamRow.id)
-      .limit(1)
-      .single();
-    
-    const { data: existingGame2 } = await supabase.from('ec_games')
-      .select('id')
-      .eq('away_team_id', homeTeamRow.id)
-      .eq('home_team_id', awayTeamRow.id)
-      .limit(1)
-      .single();
-    
-    if (existingGame1 || existingGame2) {
-      const existingId = existingGame1?.id || existingGame2?.id;
-      console.log(`  ♻️  Game already exists (updating): ${away} vs ${home}`);
-      
-      // Update the existing game's score and status
-      const finalAwayScore = awayScore !== null ? awayScore : 0;
-      const finalHomeScore = homeScore !== null ? homeScore : 0;
-      let status = headerStatus || null;
-      
-      if (existingGame1) {
-        await supabase.from('ec_games').update({
-          away_score: finalAwayScore,
-          home_score: finalHomeScore,
-          status: status || 'final',
-        }).eq('id', existingGame1.id);
+  // Also check all known gc_game_ids for this game (same teams, same date could be different games)
+  const { data: awayTeamCheck } = await supabase.from("ec_teams").select("id").eq("team_name", away).maybeSingle();
+  const { data: homeTeamCheck } = await supabase.from("ec_teams").select("id").eq("team_name", home).maybeSingle();
+  
+  // Check by gc_game_id first — each team has a different gc_game_id for the same game
+  // So we check by team IDs + score to detect true duplicates
+  let dup1 = null, dup2 = null;
+  if (awayTeamCheck && homeTeamCheck) {
+    const { data: dups1 } = await supabase.from("ec_games").select("id, away_score, home_score").eq("away_team_id", awayTeamCheck.id).eq("home_team_id", homeTeamCheck.id);
+    const { data: dups2raw } = await supabase.from("ec_games").select("id, away_score, home_score").eq("away_team_id", homeTeamCheck.id).eq("home_team_id", awayTeamCheck.id);
+    // Only consider it a duplicate if the score matches (or score is null/0)
+    if (dups1 && dups1.length > 0) {
+      const scoreMatch = dups1.find(d => d.away_score === awayScore && d.home_score === homeScore);
+      if (scoreMatch) dup1 = scoreMatch;
+    }
+    if (!dup1 && dups2raw && dups2raw.length > 0) {
+      const scoreMatch = dups2raw.find(d => d.away_score === homeScore && d.home_score === awayScore);
+      if (scoreMatch) dup2 = scoreMatch;
+    }
+    if (dup1 || dup2) {
+      const dupId = dup1 ? dup1.id : dup2.id;
+      if (awayScore !== null && homeScore !== null) {
+        const upd = dup1
+          ? { away_score: awayScore, home_score: homeScore }
+          : { away_score: homeScore, home_score: awayScore };
+        await supabase.from("ec_games").update(upd).eq("id", dupId);
+        console.log("  SKIP dup (score updated): " + away + " " + awayScore + " vs " + home + " " + homeScore);
       } else {
-        // Game exists but teams are flipped — update with swapped scores
-        await supabase.from('ec_games').update({
-          away_score: finalHomeScore,
-          home_score: finalAwayScore,
-          status: status || 'final',
-        }).eq('id', existingGame2.id);
+        console.log("  SKIP duplicate: " + away + " vs " + home);
       }
-      
-      return existingId;
+      // Re-save stats for BOTH teams with current scrape data (more accurate)
+      if (tables.length >= 4) {
+        const awayBat = parseBatting(tables[0]);
+        const awayPit = parsePitching(tables[1]);
+        const homeBat = parseBatting(tables[2]);
+        const homePit = parsePitching(tables[3]);
+        const aTeamId = awayTeamCheck.id;
+        const hTeamId = homeTeamCheck.id;
+        // Flip if teams were stored in opposite order
+        const [t1Id, t1Bat, t1Pit, t2Id, t2Bat, t2Pit] = dup1
+          ? [aTeamId, awayBat, awayPit, hTeamId, homeBat, homePit]
+          : [hTeamId, homeBat, homePit, aTeamId, awayBat, awayPit];
+        // Clear old stats
+        await supabase.from("ec_game_stats").delete().eq("game_id", dupId);
+        await supabase.from("ec_player_of_game").delete().eq("game_id", dupId);
+        // Re-save
+        for (const team of [{b:t1Bat,p:t1Pit,tid:t1Id},{b:t2Bat,p:t2Pit,tid:t2Id}]) {
+          for (const pl of team.b) {
+            const pid = await findOrCreatePlayer(pl.name, pl.jersey, team.tid);
+            if (!pid) continue;
+            await supabase.from("ec_game_stats").insert({
+              game_id: dupId, player_id: pid, team_id: team.tid,
+              stat_type: "batting", ab: pl.ab, r: pl.r, h: pl.h, rbi: pl.rbi, bb: pl.bb, so: pl.so,
+              position_played: pl.pos,
+            });
+          }
+          for (const pl of team.p) {
+            const pid = await findOrCreatePlayer(pl.name, pl.jersey, team.tid);
+            if (!pid) continue;
+            await supabase.from("ec_game_stats").insert({
+              game_id: dupId, player_id: pid, team_id: team.tid,
+              stat_type: "pitching", ip: pl.ip, p_h: pl.h, p_r: pl.r, p_er: pl.er, p_bb: pl.bb, p_so: pl.so,
+            });
+          }
+        }
+        await calculatePOTG(dupId);
+        console.log("  🔄 Re-saved stats from current scrape");
+      }
+      return dupId;
     }
   }
   // ─── END DEDUP CHECK ───
@@ -536,7 +563,10 @@ async function saveGame(url, data, ageGroup, eventName) {
   }
 
   // Clear and re-save stats
-  await supabase.from('ec_game_stats').delete().eq('game_id', gameId);
+
+    await supabase.from('ec_game_stats').delete().eq('game_id', gameId);
+    await supabase.from('ec_player_of_game').delete().eq('game_id', gameId);
+    console.log('  🔄 Cleared old stats for re-save with accurate data');
 
   for (const team of [
     { batting: awayBatting, pitching: awayPitching, teamId: awayTeamId },
@@ -545,6 +575,7 @@ async function saveGame(url, data, ageGroup, eventName) {
     for (const p of team.batting) {
       const playerId = await findOrCreatePlayer(p.name, p.jersey, team.teamId);
       if (!playerId) continue;
+      if (p.name === 'Beckham J') console.log('  STATS DEBUG Beckham J: AB=' + p.ab + ' R=' + p.r + ' H=' + p.h + ' RBI=' + p.rbi);
       await supabase.from('ec_game_stats').insert({
         game_id: gameId, player_id: playerId, team_id: team.teamId,
         stat_type: 'batting', ab: p.ab, r: p.r, h: p.h, rbi: p.rbi, bb: p.bb, so: p.so,
