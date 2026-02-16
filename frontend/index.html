@@ -548,10 +548,6 @@
 
       return stats.slice(0, 6);
     }
-      if (!val || val === 0) return `<td class="fc stat-zero">0</td>`;
-      return `<td class="fc ${cls}">${val}</td>`;
-    }
-
     // ─── HELPERS ────────────────────────────
     function sc(val, cls) {
       if (!val || val === 0) return `<td class="fc stat-zero">0</td>`;
