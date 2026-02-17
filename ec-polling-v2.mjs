@@ -22,10 +22,9 @@
 
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 import fs from 'fs';
 
-dotenv.config();
+try { const d = await import('dotenv'); d.default.config(); } catch(e) { /* dotenv not needed on Render */ }
 
 // ─── CONFIG ──────────────────────────────────────────────────
 const POLL_INTERVAL = 10; // minutes between scrape cycles
@@ -81,7 +80,8 @@ async function launchBrowser() {
   console.log('🌐 Launching Chrome with saved session...');
   browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--window-size=1920,1080'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--window-size=1920,1080'],
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     userDataDir: './gc-browser-data'
   });
   page = await browser.newPage();

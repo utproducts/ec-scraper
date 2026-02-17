@@ -147,6 +147,58 @@ const server = http.createServer(async (req, res) => {
     const result = await startScraping();
     json(result);
 
+  } else if (path === '/scrape-event' && req.method === 'POST') {
+    if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
+    
+    // Read POST body
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let params;
+    try { params = JSON.parse(body); } catch(e) { json({ error: 'Invalid JSON' }, 400); return; }
+    
+    const eventId = params.eventId;
+    if (!eventId) { json({ error: 'eventId required' }, 400); return; }
+    
+    // Load event details
+    const { data: event } = await supabase.from('ec_events').select('*').eq('id', eventId).single();
+    if (!event) { json({ error: 'Event not found' }, 404); return; }
+    
+    // Load teams with GC links for this event
+    const { data: eventTeams } = await supabase
+      .from('ec_event_teams')
+      .select('*, team:ec_teams!team_id(*)')
+      .eq('event_id', eventId);
+    
+    const teamsWithGC = (eventTeams || []).filter(et => et.team && (et.team.gc_team_id || et.team.gc_team_link));
+    
+    if (teamsWithGC.length === 0) {
+      json({ error: 'No teams with GC links found for this event' }, 400);
+      return;
+    }
+    
+    // Build ec-teams.txt dynamically
+    const eventName = event.name || event.event_name || 'Unknown Event';
+    const startDate = event.start_date || '';
+    const endDate = event.end_date || '';
+    
+    let teamsConfig = '# Auto-generated from Event Central\n';
+    teamsWithGC.forEach(et => {
+      const team = et.team;
+      const gcId = team.gc_team_id;
+      const url = team.gc_team_link || ('https://web.gc.com/teams/' + gcId);
+      const age = et.age_group || team.age_group || 'Unknown';
+      teamsConfig += url + ' | ' + age + ' | ' + eventName + ' | ' + startDate + ' | ' + endDate + '\n';
+    });
+    
+    // Write to ec-teams.txt
+    const fs = await import('fs');
+    fs.default.writeFileSync('ec-teams.txt', teamsConfig);
+    log('📝 Wrote ' + teamsWithGC.length + ' teams to ec-teams.txt for event: ' + eventName);
+    
+    // Start scraping
+    const result = await startScraping();
+    json({ ...result, teamsLoaded: teamsWithGC.length, event: eventName });
+
   } else if (path === '/stop' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
     await stopScraping();
