@@ -187,7 +187,6 @@
       </div>
       <!-- Age Group Filter -->
       <div class="age-bar" id="ageBar">
-        <button class="age-btn fc active" data-age="all" onclick="setAge('all')">ALL</button>
       </div>
       <div class="tabs">
         <button class="tab fc active" data-tab="scores">Scoreboard</button>
@@ -243,7 +242,7 @@
     const eventFilter = urlParams.get('event') || '';
     let currentTab = 'scores';
     let currentLB = 'batting';
-    let currentAge = 'all';
+    let currentAge = '';
     let expandedGame = null;
     let gamesData = [];
     let leaderData = {};
@@ -276,11 +275,16 @@
 
     function renderAgeBar() {
       const bar = document.getElementById('ageBar');
-      let html = '<button class="age-btn fc active" data-age="all" onclick="setAge(\'all\')">ALL</button>';
-      ageGroups.forEach(ag => {
-        html += `<button class="age-btn fc" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
+      let html = '';
+      ageGroups.forEach((ag, i) => {
+        html += `<button class="age-btn fc${i === 0 ? ' active' : ''}" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
       });
       bar.innerHTML = html;
+      // Default to first age group
+      if (ageGroups.length > 0 && currentAge === 'all') {
+        currentAge = ageGroups[0].age_group;
+        loadAll();
+      }
     }
 
     function setAge(age) {
@@ -294,7 +298,7 @@
     function ageParam() {
       const parts = [];
       if (eventFilter) parts.push('event=' + encodeURIComponent(eventFilter));
-      if (currentAge !== 'all') parts.push('age_group=' + encodeURIComponent(currentAge));
+      if (currentAge) parts.push('age_group=' + encodeURIComponent(currentAge));
       return parts.join('&');
     }
 
@@ -885,45 +889,23 @@
       const container = document.getElementById('standings-content');
       if (standings.length === 0) { container.innerHTML = '<div class="empty">No standings yet</div>'; return; }
 
-      // Group by age_group
-      const groups = {};
-      standings.forEach(t => {
-        const ag = t.age_group || 'Other';
-        if (!groups[ag]) groups[ag] = [];
-        groups[ag].push(t);
+      let html = `<table class="standings-table"><thead><tr>
+        <th class="fc">#</th><th class="fc">Team</th><th class="fc">W</th><th class="fc">L</th>
+        <th class="fc">RS</th><th class="fc">RA</th><th class="fc">+/-</th>
+      </tr></thead><tbody>`;
+
+      standings.forEach((t, i) => {
+        const diffClass = t.diff.startsWith('+') ? 'diff-pos' : 'diff-neg';
+        html += `<tr>
+          <td class="fc" style="font-weight:800;color:${i < 2 ? '#f59e0b' : '#475569'}">${i+1}</td>
+          <td style="color:#e2e8f0;font-weight:600;">${t.team}</td>
+          <td class="fc w-col">${t.w}</td><td class="fc l-col">${t.l}</td>
+          <td style="color:#94a3b8;">${t.rs}</td><td style="color:#94a3b8;">${t.ra}</td>
+          <td class="fc ${diffClass}">${t.diff}</td>
+        </tr>`;
       });
 
-      // Sort division keys naturally
-      const sortedKeys = Object.keys(groups).sort((a, b) => {
-        const numA = parseInt(a) || 99;
-        const numB = parseInt(b) || 99;
-        return numA - numB || a.localeCompare(b);
-      });
-
-      let html = '';
-      for (const ag of sortedKeys) {
-        const teams = groups[ag];
-        html += `<div style="margin-bottom:24px;">
-          <h3 class="fc" style="font-size:16px; font-weight:800; color:#f59e0b; text-transform:uppercase; letter-spacing:2px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.08);">${ag}</h3>
-          <table class="standings-table"><thead><tr>
-            <th class="fc">#</th><th class="fc">Team</th><th class="fc">W</th><th class="fc">L</th>
-            <th class="fc">RS</th><th class="fc">RA</th><th class="fc">+/-</th>
-          </tr></thead><tbody>`;
-
-        teams.forEach((t, i) => {
-          const diffClass = t.diff.startsWith('+') ? 'diff-pos' : 'diff-neg';
-          html += `<tr>
-            <td class="fc" style="font-weight:800;color:${i < 2 ? '#f59e0b' : '#475569'}">${i+1}</td>
-            <td style="color:#e2e8f0;font-weight:600;">${t.team}</td>
-            <td class="fc w-col">${t.w}</td><td class="fc l-col">${t.l}</td>
-            <td style="color:#94a3b8;">${t.rs}</td><td style="color:#94a3b8;">${t.ra}</td>
-            <td class="fc ${diffClass}">${t.diff}</td>
-          </tr>`;
-        });
-
-        html += '</tbody></table></div>';
-      }
-
+      html += '</tbody></table>';
       container.innerHTML = html;
     }
 

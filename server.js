@@ -1095,7 +1095,7 @@ app.get('/api/ec/games/:id', async (req, res) => {
 app.get('/api/ec/leaderboards', async (req, res) => {
   try {
     const ageGroup = req.query.age_group || null;
-    const eventName = req.query.event_name || null;
+    const eventName = req.query.event || req.query.event_name || null;
     const minAB = parseInt(req.query.min_ab) || 5;
     const minIP = parseInt(req.query.min_ip) || 5;
 
@@ -1230,7 +1230,7 @@ app.get('/api/ec/standings', async (req, res) => {
 app.get('/api/ec/all-tournament', async (req, res) => {
   try {
     const ageGroup = req.query.age_group || null;
-    const eventName = req.query.event_name || null;
+    const eventName = req.query.event || req.query.event_name || null;
     const minAB = parseInt(req.query.min_ab) || 5;
     const minIP = parseInt(req.query.min_ip) || 5;
 
@@ -1339,14 +1339,23 @@ app.get('/api/ec/potg', async (req, res) => {
 
     if (error) throw error;
 
-    const teamIds = [...new Set((data || []).flatMap(p => [p.game?.home_team_id, p.game?.away_team_id]).filter(Boolean))];
+    // Filter by event and age_group after join
+    const eventFilter = req.query.event || null;
+    const ageFilter = req.query.age_group || null;
+    const filtered = (data || []).filter(p => {
+      if (eventFilter && p.game?.event_name !== eventFilter) return false;
+      if (ageFilter && p.game?.age_group !== ageFilter) return false;
+      return true;
+    });
+
+    const teamIds = [...new Set((filtered || []).flatMap(p => [p.game?.home_team_id, p.game?.away_team_id]).filter(Boolean))];
     let teamMap = {};
     if (teamIds.length > 0) {
       const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds);
       (teams || []).forEach(t => teamMap[t.id] = t.team_name);
     }
 
-    const potg = (data || []).map(p => ({
+    const potg = (filtered || []).map(p => ({
       name: p.player?.player_name,
       jersey: p.player?.jersey_number,
       position: p.player?.primary_position || '',
