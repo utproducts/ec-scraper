@@ -187,7 +187,6 @@
       </div>
       <!-- Age Group Filter -->
       <div class="age-bar" id="ageBar">
-        <button class="age-btn fc active" data-age="all" onclick="setAge('all')">ALL</button>
       </div>
       <div class="tabs">
         <button class="tab fc active" data-tab="scores">Scoreboard</button>
@@ -239,13 +238,21 @@
 
   <script>
     const API_BASE = window.location.origin;
+    const urlParams = new URLSearchParams(window.location.search);
+    const eventFilter = urlParams.get('event') || '';
     let currentTab = 'scores';
     let currentLB = 'batting';
-    let currentAge = 'all';
+    let currentAge = '';
     let expandedGame = null;
     let gamesData = [];
     let leaderData = {};
     let ageGroups = [];
+
+    // Set event name in header if present
+    if (eventFilter) {
+      const nameEl = document.querySelector('.event-name');
+      if (nameEl) nameEl.textContent = eventFilter;
+    }
 
     // ─── CLOCK ──────────────────────────────
     function updateClock() {
@@ -257,7 +264,7 @@
     // ─── AGE GROUP FILTER ───────────────────
     async function loadAgeGroups() {
       try {
-        const res = await fetch(API_BASE + '/api/ec/age-groups');
+        const res = await fetch(API_BASE + '/api/ec/age-groups' + (eventFilter ? '?event=' + encodeURIComponent(eventFilter) : ''));
         const data = await res.json();
         ageGroups = data.age_groups || [];
         renderAgeBar();
@@ -268,11 +275,16 @@
 
     function renderAgeBar() {
       const bar = document.getElementById('ageBar');
-      let html = '<button class="age-btn fc active" data-age="all" onclick="setAge(\'all\')">ALL</button>';
-      ageGroups.forEach(ag => {
-        html += `<button class="age-btn fc" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
+      let html = '';
+      ageGroups.forEach((ag, i) => {
+        html += `<button class="age-btn fc${i === 0 ? ' active' : ''}" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
       });
       bar.innerHTML = html;
+      // Default to first age group
+      if (ageGroups.length > 0 && currentAge === 'all') {
+        currentAge = ageGroups[0].age_group;
+        loadAll();
+      }
     }
 
     function setAge(age) {
@@ -284,7 +296,10 @@
     }
 
     function ageParam() {
-      return currentAge !== 'all' ? `age_group=${encodeURIComponent(currentAge)}` : '';
+      const parts = [];
+      if (eventFilter) parts.push('event=' + encodeURIComponent(eventFilter));
+      if (currentAge) parts.push('age_group=' + encodeURIComponent(currentAge));
+      return parts.join('&');
     }
 
     // ─── TABS ───────────────────────────────
