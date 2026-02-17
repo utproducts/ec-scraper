@@ -982,10 +982,14 @@ Respond as if you're texting back personally.`
 // GET /api/ec/age-groups — List available age groups and events
 app.get('/api/ec/age-groups', async (req, res) => {
   try {
-    const { data } = await supabase
+    let query = supabase
       .from('ec_games')
       .select('age_group, event_name')
       .not('age_group', 'is', null);
+    
+    if (req.query.event) query = query.eq('event_name', req.query.event);
+    
+    const { data } = await query;
     
     const groups = {};
     for (const g of (data || [])) {
@@ -1018,6 +1022,7 @@ app.get('/api/ec/games', async (req, res) => {
 
     if (req.query.status) query = query.eq('status', req.query.status);
     if (req.query.age_group) query = query.eq('age_group', req.query.age_group);
+    if (req.query.event) query = query.eq('event_name', req.query.event);
 
     const { data: games, error } = await query;
     if (error) throw error;
@@ -1175,33 +1180,42 @@ app.get('/api/ec/leaderboards', async (req, res) => {
 // GET /api/ec/standings — W-L records
 app.get('/api/ec/standings', async (req, res) => {
   try {
-    const { data: games } = await supabase
+    let query = supabase
       .from('ec_games')
-      .select('home_score, away_score, home_team_id, away_team_id, age_group')
+      .select('home_score, away_score, home_team_id, away_team_id, age_group, event_name')
       .eq('status', 'final');
 
+    if (req.query.event) query = query.eq('event_name', req.query.event);
+    if (req.query.age_group) query = query.eq('age_group', req.query.age_group);
+
+    const { data: games } = await query;
+
     const teamIds = [...new Set((games||[]).flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
-    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds);
+    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds.length ? teamIds : ['none']);
     const teamMap = {};
     (teams || []).forEach(t => teamMap[t.id] = t.team_name);
 
+    // Track standings per team, keeping age_group from the game
     const standings = {};
     for (const g of (games || [])) {
-      if (!standings[g.home_team_id]) standings[g.home_team_id] = { team: teamMap[g.home_team_id]||'Unknown', w:0, l:0, rs:0, ra:0 };
-      if (!standings[g.away_team_id]) standings[g.away_team_id] = { team: teamMap[g.away_team_id]||'Unknown', w:0, l:0, rs:0, ra:0 };
+      const hKey = g.home_team_id + '|' + (g.age_group || '');
+      const aKey = g.away_team_id + '|' + (g.age_group || '');
+      
+      if (!standings[hKey]) standings[hKey] = { team: teamMap[g.home_team_id]||'Unknown', team_id: g.home_team_id, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
+      if (!standings[aKey]) standings[aKey] = { team: teamMap[g.away_team_id]||'Unknown', team_id: g.away_team_id, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
 
-      standings[g.home_team_id].rs += g.home_score||0;
-      standings[g.home_team_id].ra += g.away_score||0;
-      standings[g.away_team_id].rs += g.away_score||0;
-      standings[g.away_team_id].ra += g.home_score||0;
+      standings[hKey].rs += g.home_score||0;
+      standings[hKey].ra += g.away_score||0;
+      standings[aKey].rs += g.away_score||0;
+      standings[aKey].ra += g.home_score||0;
 
-      if (g.home_score > g.away_score) { standings[g.home_team_id].w++; standings[g.away_team_id].l++; }
-      else if (g.away_score > g.home_score) { standings[g.away_team_id].w++; standings[g.home_team_id].l++; }
+      if (g.home_score > g.away_score) { standings[hKey].w++; standings[aKey].l++; }
+      else if (g.away_score > g.home_score) { standings[aKey].w++; standings[hKey].l++; }
     }
 
     const result = Object.values(standings)
       .map(t => ({ ...t, diff: (t.rs-t.ra) > 0 ? `+${t.rs-t.ra}` : `${t.rs-t.ra}` }))
-      .sort((a,b) => b.w - a.w || a.l - b.l);
+      .sort((a,b) => b.w - a.w || a.l - b.l || (b.rs-b.ra) - (a.rs-a.ra));
 
     res.json({ standings: result });
   } catch (err) {
