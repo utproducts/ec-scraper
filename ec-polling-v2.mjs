@@ -90,7 +90,7 @@ async function launchBrowser() {
 
 async function checkLogin() {
   console.log('🔑 Checking saved session...');
-  await page.goto('https://web.gc.com', { waitUntil: 'networkidle2', timeout: 30000 });
+  await page.goto('https://web.gc.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await sleep(2000);
   
   const loggedIn = await page.evaluate(() => {
@@ -219,7 +219,7 @@ function parsePitching(tableText) {
 async function discoverGames(teamUrl, startDate, endDate) {
   try {
     // Navigate to team page
-    await page.goto(teamUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(teamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
     
     // Click the SCHEDULE tab
@@ -296,7 +296,7 @@ async function discoverGames(teamUrl, startDate, endDate) {
 
 async function scrapeGame(url) {
   try {
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(6000);
 
     const rawData = await page.evaluate(() => {
