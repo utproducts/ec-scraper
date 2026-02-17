@@ -1393,6 +1393,131 @@ app.get('/ec/all-tournament', (req, res) => {
   res.sendFile(__dirname + '/frontend/all-tournament.html');
 });
 
+
+// ═══ CRM + GC COLLECTION ROUTES ═══════════════════════════
+
+// Serve GC submission form
+app.get("/gc-submit", (req, res) => {
+  res.sendFile(__dirname + "/frontend/gc-submit.html");
+});
+app.get("/gc-submit/:token", (req, res) => {
+  res.sendFile(__dirname + "/frontend/gc-submit.html");
+});
+
+// GET submission data by token
+app.get("/api/gc-submit/:token", async (req, res) => {
+  try {
+    const { data, error } = await supabase.from("gc_submissions").select("*").eq("token", req.params.token).single();
+    if (error || !data) return res.status(404).json({ error: "Not found" });
+    res.json({ team_name: data.team_name, age_group: data.age_group, team_class: data.team_class, coach_name: data.coach_name, submitted_at: data.submitted_at, no_gc: data.no_gc, gc_url: data.gc_url });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Track form view
+app.post("/api/gc-submit/:token/viewed", async (req, res) => {
+  await supabase.from("gc_submissions").update({ form_viewed_at: new Date().toISOString() }).eq("token", req.params.token).is("form_viewed_at", null);
+  res.json({ ok: true });
+});
+
+// POST submission (coach submits GC link)
+app.post("/api/gc-submit/:token", async (req, res) => {
+  try {
+    const { gc_url, no_gc } = req.body;
+    const { data: sub } = await supabase.from("gc_submissions").select("*").eq("token", req.params.token).single();
+    if (!sub) return res.status(404).json({ error: "Invalid token" });
+    let gcTeamId = null;
+    if (gc_url) { const match = gc_url.match(/teams\/([A-Za-z0-9]+)/); gcTeamId = match ? match[1] : null; }
+    await supabase.from("gc_submissions").update({ gc_url: gc_url || null, no_gc: !!no_gc, submitted_at: new Date().toISOString() }).eq("token", req.params.token);
+    if (sub.contact_id) {
+      await supabase.from("crm_contacts").update({ gc_team_url: gc_url || null, gc_team_id: gcTeamId, gc_status: no_gc ? "no_gc" : "submitted", gc_submitted_at: new Date().toISOString() }).eq("id", sub.contact_id);
+    }
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET CRM contacts with filtering
+app.get("/api/crm/contacts", async (req, res) => {
+  try {
+    const { state, age_group, gc_status, search, limit, offset } = req.query;
+    let query = supabase.from("crm_contacts").select("*", { count: "exact" }).eq("is_active", true).order("updated_at", { ascending: false });
+    if (state) query = query.contains("states_active", [state]);
+    if (age_group) query = query.eq("age_group", age_group);
+    if (gc_status) query = query.eq("gc_status", gc_status);
+    if (search) query = query.or("team_name.ilike.%" + search + "%,first_name.ilike.%" + search + "%,last_name.ilike.%" + search + "%,email.ilike.%" + search + "%");
+    query = query.range(parseInt(offset) || 0, (parseInt(offset) || 0) + (parseInt(limit) || 50) - 1);
+    const { data, count, error } = await query;
+    if (error) throw error;
+    res.json({ contacts: data, total: count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET CRM summary
+app.get("/api/crm/summary", async (req, res) => {
+  try {
+    const { data } = await supabase.from("crm_summary").select("*").single();
+    res.json(data || {});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET GC progress by state
+app.get("/api/crm/gc-progress", async (req, res) => {
+  try {
+    const { data } = await supabase.from("gc_progress_by_state").select("*");
+    res.json(data || []);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST import coaches into CRM
+app.post("/api/crm/import-coaches", async (req, res) => {
+  try {
+    const { coaches, state } = req.body;
+    let imported = 0, skipped = 0;
+    for (const c of coaches) {
+      const rec = { first_name: c.CoachFirst || c.firstName, last_name: c.CoachLast || c.lastName, email: (c.Email || c.email || "").toLowerCase().trim(), phone: c.Phone || c.phone, team_name: c.TeamName || c.teamName, team_city: c.TeamCity || c.teamCity, team_state: c.TeamState || c.teamState || state, age_group: c.AgeGroup || c.ageGroup, team_class: c.DivClass || c.teamClass, dc_team_id: c.TeamID || c.teamID, dc_registration: c.Registration || c.registration, states_active: [state || "FL"], source: "dc_scraper", season: "2026" };
+      if (!rec.email && !rec.phone && !rec.first_name) { skipped++; continue; }
+      const { error } = await supabase.from("crm_contacts").upsert(rec, { onConflict: "dc_registration,season", ignoreDuplicates: false });
+      if (error) skipped++; else imported++;
+    }
+    res.json({ imported, skipped, total: coaches.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST generate GC tokens for contacts
+app.post("/api/crm/generate-gc-tokens", async (req, res) => {
+  try {
+    const { filter } = req.body;
+    let query = supabase.from("crm_contacts").select("*").eq("is_active", true).eq("gc_status", "unknown").not("email", "is", null);
+    if (filter?.state) query = query.contains("states_active", [filter.state]);
+    if (filter?.age_group) query = query.eq("age_group", filter.age_group);
+    const { data: contacts } = await query;
+    const crypto = require("crypto");
+    let created = 0;
+    for (const contact of (contacts || [])) {
+      const token = crypto.randomUUID().replace(/-/g, "").substring(0, 16);
+      const { data: existing } = await supabase.from("gc_submissions").select("id").eq("contact_id", contact.id).maybeSingle();
+      if (!existing) {
+        await supabase.from("gc_submissions").insert({ contact_id: contact.id, token, team_name: contact.team_name, age_group: contact.age_group, team_class: contact.team_class, coach_name: (contact.first_name + " " + contact.last_name).trim() });
+        created++;
+      }
+    }
+    res.json({ contacts_matched: (contacts || []).length, tokens_created: created });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET email templates
+app.get("/api/email/templates", async (req, res) => {
+  try {
+    const { data } = await supabase.from("email_templates").select("*").order("created_at");
+    res.json(data || []);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unsubscribe
+app.get("/unsubscribe/:contactId", async (req, res) => {
+  await supabase.from("crm_contacts").update({ opted_out: true, opted_out_at: new Date().toISOString() }).eq("id", req.params.contactId);
+  res.send("<html><body style=\"font-family:Arial;text-align:center;padding:60px;background:#0a0e1a;color:#eee;\"><h2>Unsubscribed</h2><p>You will not receive any more emails from us.</p></body></html>");
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Unrivaled Connect server running on port ${PORT}`);
   console.log(`📱 Twilio configured for: ${process.env.TWILIO_ACCOUNT_SID}`);

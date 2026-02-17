@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submit GameChanger Link — Unrivaled Baseball Network</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --card: #131829;
+      --card-border: #1e2540;
+      --red: #e94560;
+      --red-glow: #e9456033;
+      --green: #2ecc71;
+      --blue: #3b82f6;
+      --text: #e8eaf0;
+      --text-dim: #8892a4;
+      --gold: #f0c040;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 520px;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 40px 0 30px;
+    }
+    .header .brand {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 800;
+      margin: 8px 0 4px;
+      background: linear-gradient(135deg, #fff, #c0c8e0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header .subtitle {
+      color: var(--red);
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Team Info Card */
+    .team-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .team-card .label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .team-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .team-details {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .team-details .detail {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .team-details .detail .val {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-age { background: var(--blue); color: #fff; }
+    .badge-class { background: #1e2540; color: var(--gold); border: 1px solid #2a3050; }
+
+    /* Form Card */
+    .form-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+    }
+    .form-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .form-card .desc {
+      color: var(--text-dim);
+      font-size: 14px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+    .input-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg);
+      border: 2px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      transition: border-color 0.2s;
+    }
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--red);
+      box-shadow: 0 0 0 3px var(--red-glow);
+    }
+    .input-group input::placeholder {
+      color: #4a5070;
+    }
+    .input-hint {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* No GC checkbox */
+    .no-gc-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 10px;
+      margin-bottom: 24px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s;
+    }
+    .no-gc-row:hover { border-color: var(--card-border); }
+    .no-gc-row.checked { border-color: var(--blue); background: #131d35; }
+    .no-gc-row input[type="checkbox"] {
+      width: 20px; height: 20px;
+      accent-color: var(--blue);
+      cursor: pointer;
+    }
+    .no-gc-row .no-gc-text {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+    .no-gc-row .no-gc-text strong { color: var(--text); }
+
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      padding: 16px;
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .btn-submit:hover { background: #d63b54; transform: translateY(-1px); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { background: #333; cursor: not-allowed; transform: none; }
+
+    /* Success State */
+    .success-card {
+      background: var(--card);
+      border: 2px solid var(--green);
+      border-radius: 16px;
+      padding: 40px 28px;
+      text-align: center;
+      display: none;
+    }
+    .success-card .checkmark {
+      width: 80px; height: 80px;
+      background: #1a3a2a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 40px;
+    }
+    .success-card h2 {
+      font-size: 22px;
+      margin-bottom: 10px;
+      color: var(--green);
+    }
+    .success-card p {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* Error */
+    .error-card {
+      background: #2a1520;
+      border: 1px solid #4a2030;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      display: none;
+      color: #ff8090;
+      font-size: 14px;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 30px 0;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    .footer a { color: var(--text-dim); }
+
+    /* Loading */
+    .loading { text-align: center; padding: 60px 0; color: var(--text-dim); }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--card-border);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">Unrivaled Baseball</div>
+      <h1>Stat Tracking</h1>
+      <div class="subtitle">2026 Season</div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingState" class="loading">
+      <div class="spinner"></div>
+      <p>Loading your team info...</p>
+    </div>
+
+    <!-- Form State -->
+    <div id="formState" style="display:none;">
+      <div class="team-card">
+        <div class="label">Your Team</div>
+        <div class="team-name" id="teamName">—</div>
+        <div class="team-details">
+          <span class="badge badge-age" id="ageGroup">—</span>
+          <span class="badge badge-class" id="teamClass">—</span>
+          <div class="detail">
+            <span id="coachName">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <h2>Submit Your GameChanger Link</h2>
+        <p class="desc">Help us verify game scores and deliver real-time stats for your team. Submit your GameChanger team link once and we'll have it for every event this season.</p>
+
+        <div id="errorMsg" class="error-card"></div>
+
+        <div class="input-group" id="gcInputGroup">
+          <label>GameChanger Team URL</label>
+          <input type="url" id="gcUrl" placeholder="https://web.gc.com/teams/..." autocomplete="off">
+          <div class="input-hint">Open GameChanger → Your Team → Share → Copy Link</div>
+        </div>
+
+        <div class="no-gc-row" id="noGcRow" onclick="toggleNoGc()">
+          <input type="checkbox" id="noGcCheck">
+          <div class="no-gc-text">
+            <strong>We don't use GameChanger</strong><br>
+            No problem — we'll still track your stats through our other sources.
+          </div>
+        </div>
+
+        <button class="btn-submit" id="submitBtn" onclick="submitForm()">
+          Submit for 2026 Season →
+        </button>
+      </div>
+    </div>
+
+    <!-- Success State -->
+    <div id="successState" class="success-card">
+      <div class="checkmark">✓</div>
+      <h2>You're All Set!</h2>
+      <p id="successMessage">Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your events this season.</p>
+    </div>
+
+    <!-- Invalid Token State -->
+    <div id="invalidState" style="display:none; text-align:center; padding:60px 0;">
+      <p style="font-size:48px; margin-bottom:16px;">🔗</p>
+      <h2 style="margin-bottom:8px;">Link Not Found</h2>
+      <p style="color:var(--text-dim);">This submission link is invalid or has expired. Contact your tournament director for a new link.</p>
+    </div>
+
+    <div class="footer">
+      <p>Unrivaled Baseball Network &bull; Powered by USSSA</p>
+      <p style="margin-top:6px;">Questions? Email support@unrivaledbaseball.com</p>
+    </div>
+  </div>
+
+  <script>
+    // Config
+    const SUPABASE_URL = 'https://rjwmklbcghsdxonkwkjz.supabase.co';
+    const SUPABASE_KEY = ''; // Will be set via backend proxy
+    const API_BASE = 'https://unrivaled-connect-backend.onrender.com';
+
+    // Get token from URL
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('t') || window.location.pathname.split('/').pop();
+    
+    let submissionData = null;
+
+    // Load submission data
+    async function loadSubmission() {
+      if (!token || token === 'gc-submit' || token === '') {
+        showState('invalidState');
+        return;
+      }
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/gc-submit/${token}`);
+        if (!resp.ok) throw new Error('Not found');
+        
+        submissionData = await resp.json();
+        
+        document.getElementById('teamName').textContent = submissionData.team_name || 'Unknown Team';
+        document.getElementById('ageGroup').textContent = submissionData.age_group || '—';
+        document.getElementById('teamClass').textContent = submissionData.team_class || '—';
+        document.getElementById('coachName').textContent = submissionData.coach_name || '';
+        
+        // If already submitted, show success
+        if (submissionData.submitted_at) {
+          document.getElementById('successMessage').textContent = 
+            submissionData.no_gc 
+              ? "Thanks for letting us know. We'll track your stats through our other sources."
+              : "Your GameChanger link is already on file. We'll use it for all events this season.";
+          showState('successState');
+          return;
+        }
+
+        // Track form view
+        fetch(`${API_BASE}/api/gc-submit/${token}/viewed`, { method: 'POST' });
+        
+        showState('formState');
+      } catch (err) {
+        showState('invalidState');
+      }
+    }
+
+    function showState(id) {
+      ['loadingState', 'formState', 'successState', 'invalidState'].forEach(s => {
+        document.getElementById(s).style.display = s === id ? 'block' : 'none';
+      });
+    }
+
+    function toggleNoGc() {
+      const check = document.getElementById('noGcCheck');
+      check.checked = !check.checked;
+      document.getElementById('noGcRow').classList.toggle('checked', check.checked);
+      
+      const input = document.getElementById('gcInputGroup');
+      input.style.opacity = check.checked ? '0.3' : '1';
+      input.querySelector('input').disabled = check.checked;
+    }
+
+    async function submitForm() {
+      const gcUrl = document.getElementById('gcUrl').value.trim();
+      const noGc = document.getElementById('noGcCheck').checked;
+      const errorEl = document.getElementById('errorMsg');
+      
+      errorEl.style.display = 'none';
+
+      // Validate
+      if (!noGc && !gcUrl) {
+        errorEl.textContent = 'Please paste your GameChanger team link, or check the box if you don\'t use GameChanger.';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      if (!noGc && gcUrl && !gcUrl.includes('gc.com')) {
+        errorEl.textContent = 'That doesn\'t look like a GameChanger link. It should start with https://web.gc.com/teams/...';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // Submit
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/gc-submit/${token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gc_url: gcUrl || null, no_gc: noGc })
+        });
+
+        if (!resp.ok) throw new Error('Submission failed');
+
+        document.getElementById('successMessage').textContent = noGc
+          ? "Thanks for letting us know! We'll still track your stats through our official USSSA scoring system."
+          : "Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your USSSA events this season.";
+        
+        showState('successState');
+      } catch (err) {
+        errorEl.textContent = 'Something went wrong. Please try again or contact support.';
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Submit for 2026 Season →';
+      }
+    }
+
+    // Init
+    loadSubmission();
+  </script>
+</body>
+</html>
