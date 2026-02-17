@@ -29,6 +29,9 @@ RUN npm ci --omit=dev
 COPY ec-polling-v2.mjs ./
 COPY ec-scraper-service.mjs ./
 COPY ec-teams.txt ./
-RUN mkdir -p /app/gc-browser-data
+COPY gc-browser-data/ /app/gc-browser-data-seed/
+COPY start.sh ./
+RUN chmod +x start.sh
+
 EXPOSE 3001
-CMD ["node", "ec-scraper-service.mjs"]
+CMD ["./start.sh"]
