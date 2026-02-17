@@ -1195,22 +1195,25 @@ app.get('/api/ec/standings', async (req, res) => {
     const teamMap = {};
     (teams || []).forEach(t => teamMap[t.id] = t.team_name);
 
-    // Track standings per team, keeping age_group from the game
+    // Track standings by team NAME to merge duplicates
     const standings = {};
     for (const g of (games || [])) {
-      const hKey = g.home_team_id + '|' + (g.age_group || '');
-      const aKey = g.away_team_id + '|' + (g.age_group || '');
+      const homeName = teamMap[g.home_team_id] || 'Unknown';
+      const awayName = teamMap[g.away_team_id] || 'Unknown';
       
-      if (!standings[hKey]) standings[hKey] = { team: teamMap[g.home_team_id]||'Unknown', team_id: g.home_team_id, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
-      if (!standings[aKey]) standings[aKey] = { team: teamMap[g.away_team_id]||'Unknown', team_id: g.away_team_id, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
+      // Skip TBD placeholder teams
+      if (homeName.startsWith('TBD') || awayName.startsWith('TBD')) continue;
+      
+      if (!standings[homeName]) standings[homeName] = { team: homeName, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
+      if (!standings[awayName]) standings[awayName] = { team: awayName, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
 
-      standings[hKey].rs += g.home_score||0;
-      standings[hKey].ra += g.away_score||0;
-      standings[aKey].rs += g.away_score||0;
-      standings[aKey].ra += g.home_score||0;
+      standings[homeName].rs += g.home_score||0;
+      standings[homeName].ra += g.away_score||0;
+      standings[awayName].rs += g.away_score||0;
+      standings[awayName].ra += g.home_score||0;
 
-      if (g.home_score > g.away_score) { standings[hKey].w++; standings[aKey].l++; }
-      else if (g.away_score > g.home_score) { standings[aKey].w++; standings[hKey].l++; }
+      if (g.home_score > g.away_score) { standings[homeName].w++; standings[awayName].l++; }
+      else if (g.away_score > g.home_score) { standings[awayName].w++; standings[homeName].l++; }
     }
 
     const result = Object.values(standings)
