@@ -144,8 +144,8 @@ const server = http.createServer(async (req, res) => {
   // ─── PROTECTED ENDPOINTS (require API_SECRET) ────────────
   } else if (path === '/scrape' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
-    const result = await startScraping();
-    json(result);
+    json({ status: 'starting' });
+    startScraping().catch(err => log('❌ Scrape error: ' + err.message));
 
   } else if (path === '/scrape-event' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
@@ -195,9 +195,9 @@ const server = http.createServer(async (req, res) => {
     fs.default.writeFileSync('ec-teams.txt', teamsConfig);
     log('📝 Wrote ' + teamsWithGC.length + ' teams to ec-teams.txt for event: ' + eventName);
     
-    // Start scraping
-    const result = await startScraping();
-    json({ ...result, teamsLoaded: teamsWithGC.length, event: eventName });
+    // Start scraping in background (don't await - respond immediately)
+    json({ status: 'starting', teamsLoaded: teamsWithGC.length, event: eventName });
+    startScraping().catch(err => log('❌ Scrape error: ' + err.message));
 
   } else if (path === '/stop' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
