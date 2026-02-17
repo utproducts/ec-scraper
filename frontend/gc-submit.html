@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Submit GameChanger Link — Unrivaled Baseball Network</title>
+  <title>Submit GameChanger Link — USSSA Stat Tracker</title>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #0a0e1a;
       --card: #131829;
       --card-border: #1e2540;
-      --red: #e94560;
-      --red-glow: #e9456033;
+      --red: #cc0000;
+      --red-glow: #cc000033;
       --green: #2ecc71;
       --blue: #3b82f6;
       --text: #e8eaf0;
@@ -207,7 +207,7 @@
       transition: all 0.2s;
       letter-spacing: 0.5px;
     }
-    .btn-submit:hover { background: #d63b54; transform: translateY(-1px); }
+    .btn-submit:hover { background: #a00000; transform: translateY(-1px); }
     .btn-submit:active { transform: translateY(0); }
     .btn-submit:disabled { background: #333; cursor: not-allowed; transform: none; }
 
@@ -277,8 +277,8 @@
 <body>
   <div class="container">
     <div class="header">
-      <div class="brand">Unrivaled Baseball</div>
-      <h1>Stat Tracking</h1>
+      <div class="brand">USSSA BASEBALL</div>
+      <h1>Stat Tracker</h1>
       <div class="subtitle">2026 Season</div>
     </div>
 
@@ -304,7 +304,7 @@
 
       <div class="form-card">
         <h2>Submit Your GameChanger Link</h2>
-        <p class="desc">Help us verify game scores and deliver real-time stats for your team. Submit your GameChanger team link once and we'll have it for every event this season.</p>
+        <p class="desc">USSSA is enhancing stat tracking and game verification across all events this season. Submit your GameChanger team link once and we'll have it for every event you enter.</p>
 
         <div id="errorMsg" class="error-card"></div>
 
@@ -318,7 +318,7 @@
           <input type="checkbox" id="noGcCheck">
           <div class="no-gc-text">
             <strong>We don't use GameChanger</strong><br>
-            No problem — we'll still track your stats through our other sources.
+            No problem — we'll still track your stats through our official USSSA scoring system.
           </div>
         </div>
 
@@ -332,7 +332,7 @@
     <div id="successState" class="success-card">
       <div class="checkmark">✓</div>
       <h2>You're All Set!</h2>
-      <p id="successMessage">Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your events this season.</p>
+      <p id="successMessage">Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your USSSA events this season.</p>
     </div>
 
     <!-- Invalid Token State -->
@@ -343,24 +343,19 @@
     </div>
 
     <div class="footer">
-      <p>Unrivaled Baseball Network &bull; Powered by USSSA</p>
-      <p style="margin-top:6px;">Questions? Email support@unrivaledbaseball.com</p>
+      <p>USSSA Baseball &bull; Official Stat Tracker</p>
+      <p style="margin-top:6px;">Questions? Contact your State Director</p>
     </div>
   </div>
 
   <script>
-    // Config
-    const SUPABASE_URL = 'https://rjwmklbcghsdxonkwkjz.supabase.co';
-    const SUPABASE_KEY = ''; // Will be set via backend proxy
     const API_BASE = 'https://unrivaled-connect-backend.onrender.com';
 
-    // Get token from URL
     const params = new URLSearchParams(window.location.search);
     const token = params.get('t') || window.location.pathname.split('/').pop();
     
     let submissionData = null;
 
-    // Load submission data
     async function loadSubmission() {
       if (!token || token === 'gc-submit' || token === '') {
         showState('invalidState');
@@ -378,17 +373,15 @@
         document.getElementById('teamClass').textContent = submissionData.team_class || '—';
         document.getElementById('coachName').textContent = submissionData.coach_name || '';
         
-        // If already submitted, show success
         if (submissionData.submitted_at) {
           document.getElementById('successMessage').textContent = 
             submissionData.no_gc 
-              ? "Thanks for letting us know. We'll track your stats through our other sources."
-              : "Your GameChanger link is already on file. We'll use it for all events this season.";
+              ? "Thanks for letting us know. We'll track your stats through our official USSSA scoring system."
+              : "Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your USSSA events this season.";
           showState('successState');
           return;
         }
 
-        // Track form view
         fetch(`${API_BASE}/api/gc-submit/${token}/viewed`, { method: 'POST' });
         
         showState('formState');
@@ -420,7 +413,6 @@
       
       errorEl.style.display = 'none';
 
-      // Validate
       if (!noGc && !gcUrl) {
         errorEl.textContent = 'Please paste your GameChanger team link, or check the box if you don\'t use GameChanger.';
         errorEl.style.display = 'block';
@@ -433,7 +425,6 @@
         return;
       }
 
-      // Submit
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
@@ -448,7 +439,7 @@
         if (!resp.ok) throw new Error('Submission failed');
 
         document.getElementById('successMessage').textContent = noGc
-          ? "Thanks for letting us know! We'll still track your stats through our official USSSA scoring system."
+          ? "Thanks for letting us know. We'll track your stats through our official USSSA scoring system."
           : "Your GameChanger link has been saved. We'll use it for stat tracking and game verification across all your USSSA events this season.";
         
         showState('successState');
@@ -460,7 +451,6 @@
       }
     }
 
-    // Init
     loadSubmission();
   </script>
 </body>
