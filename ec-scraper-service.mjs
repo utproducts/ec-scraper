@@ -2,6 +2,15 @@ import http from 'http';
 import { createClient } from '@supabase/supabase-js';
 import { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig } from './ec-polling-v2.mjs';
 
+// Prevent Chrome crashes from killing the service
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err.message);
+  console.error(err.stack);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('[UNHANDLED REJECTION]', err?.message || err);
+});
+
 const PORT = process.env.PORT || 3001;
 const API_SECRET = process.env.API_SECRET || 'ec-scraper-secret-2026';
 const supabase = createClient(
@@ -44,15 +53,22 @@ async function startScraping() {
   log('🚀 Starting scraper...');
 
   try {
+    log('🌐 About to launch browser...');
     await launchBrowser();
+    log('🌐 Browser launched OK');
     await checkLogin();
+    log('✅ Login check passed');
     
     const teams = readTeamConfig();
     currentEvent = teams.length > 0 ? teams[0].eventName : 'Unknown';
     log('📋 Loaded ' + teams.length + ' teams for ' + currentEvent);
 
     // First cycle
-    await runCycle(teams);
+    try {
+      await runCycle(teams);
+    } catch (cycleErr) {
+      log('❌ First cycle error (continuing): ' + cycleErr.message);
+    }
 
     // Start polling interval
     pollInterval = setInterval(async () => {
@@ -74,6 +90,8 @@ async function startScraping() {
   } catch (err) {
     scraperStatus = 'error';
     log('❌ Start error: ' + err.message);
+    log('❌ Stack: ' + (err.stack || 'none'));
+    try { await closeBrowser(); } catch(e) {}
     return { error: err.message };
   }
 }
