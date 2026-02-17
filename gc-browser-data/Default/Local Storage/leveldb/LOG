@@ -1,0 +1,66 @@
+2026/02/16-12:02:56.303 ade304 Reusing MANIFEST /Users/ChadMary/Desktop/unrivaled-connect/backend/gc-browser-data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/02/16-12:02:56.305 ade304 Recovering log #274
+2026/02/16-12:02:56.305 ade304 Reusing old log /Users/ChadMary/Desktop/unrivaled-connect/backend/gc-browser-data/Default/Local Storage/leveldb/000274.log 
+2026/02/16-12:03:56.310 ade307 Level-0 table #279: started
+2026/02/16-12:03:56.314 ade307 Level-0 table #279: 85703 bytes OK
+2026/02/16-12:03:56.317 ade307 Delete type=0 #274
+2026/02/16-12:08:09.235 ade307 Level-0 table #281: started
+2026/02/16-12:08:09.237 ade307 Level-0 table #281: 79531 bytes OK
+2026/02/16-12:08:09.239 ade307 Delete type=0 #278
+2026/02/16-12:10:45.963 ade307 Level-0 table #283: started
+2026/02/16-12:10:45.967 ade307 Level-0 table #283: 81937 bytes OK
+2026/02/16-12:10:45.970 ade307 Delete type=0 #280
+2026/02/16-12:13:22.350 ade307 Level-0 table #285: started
+2026/02/16-12:13:22.352 ade307 Level-0 table #285: 79828 bytes OK
+2026/02/16-12:13:22.354 ade307 Delete type=0 #282
+2026/02/16-12:13:22.354 ade307 Compacting 4@0 + 1@1 files
+2026/02/16-12:13:22.358 ade307 Generated table #286@0: 47 keys, 84292 bytes
+2026/02/16-12:13:22.358 ade307 Compacted 4@0 + 1@1 files => 84292 bytes
+2026/02/16-12:13:22.360 ade307 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/16-12:13:22.360 ade307 Delete type=2 #276
+2026/02/16-12:13:22.360 ade307 Delete type=2 #283
+2026/02/16-12:13:22.360 ade307 Delete type=2 #281
+2026/02/16-12:13:22.360 ade307 Delete type=2 #285
+2026/02/16-12:13:22.360 ade307 Delete type=2 #279
+2026/02/16-12:15:59.137 ade307 Level-0 table #288: started
+2026/02/16-12:15:59.139 ade307 Level-0 table #288: 80152 bytes OK
+2026/02/16-12:15:59.141 ade307 Delete type=0 #284
+2026/02/16-12:18:36.286 ade307 Level-0 table #290: started
+2026/02/16-12:18:36.295 ade307 Level-0 table #290: 81119 bytes OK
+2026/02/16-12:18:36.299 ade307 Delete type=0 #287
+2026/02/16-12:21:13.078 ade307 Level-0 table #292: started
+2026/02/16-12:21:13.082 ade307 Level-0 table #292: 80145 bytes OK
+2026/02/16-12:21:13.084 ade307 Delete type=0 #289
+2026/02/16-12:23:49.866 ade307 Level-0 table #294: started
+2026/02/16-12:23:49.869 ade307 Level-0 table #294: 80156 bytes OK
+2026/02/16-12:23:49.871 ade307 Delete type=0 #291
+2026/02/16-12:23:49.871 ade307 Compacting 4@0 + 1@1 files
+2026/02/16-12:23:49.875 ade307 Generated table #295@0: 47 keys, 84882 bytes
+2026/02/16-12:23:49.875 ade307 Compacted 4@0 + 1@1 files => 84882 bytes
+2026/02/16-12:23:49.876 ade307 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/16-12:23:49.876 ade307 Delete type=2 #288
+2026/02/16-12:23:49.876 ade307 Delete type=2 #294
+2026/02/16-12:23:49.876 ade307 Delete type=2 #290
+2026/02/16-12:23:49.876 ade307 Delete type=2 #286
+2026/02/16-12:23:49.876 ade307 Delete type=2 #292
+2026/02/16-12:26:26.907 ade307 Level-0 table #297: started
+2026/02/16-12:26:26.912 ade307 Level-0 table #297: 80424 bytes OK
+2026/02/16-12:26:26.915 ade307 Delete type=0 #293
+2026/02/16-12:29:04.143 ade307 Level-0 table #299: started
+2026/02/16-12:29:04.148 ade307 Level-0 table #299: 80937 bytes OK
+2026/02/16-12:29:04.151 ade307 Delete type=0 #296
+2026/02/16-12:31:41.395 ade307 Level-0 table #301: started
+2026/02/16-12:31:41.401 ade307 Level-0 table #301: 81023 bytes OK
+2026/02/16-12:31:41.404 ade307 Delete type=0 #298
+2026/02/16-12:34:19.032 ade307 Level-0 table #303: started
+2026/02/16-12:34:19.044 ade307 Level-0 table #303: 81411 bytes OK
+2026/02/16-12:34:19.049 ade307 Delete type=0 #300
+2026/02/16-12:34:19.053 ade307 Compacting 4@0 + 1@1 files
+2026/02/16-12:34:19.059 ade307 Generated table #304@0: 47 keys, 85744 bytes
+2026/02/16-12:34:19.059 ade307 Compacted 4@0 + 1@1 files => 85744 bytes
+2026/02/16-12:34:19.061 ade307 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/16-12:34:19.061 ade307 Delete type=2 #301
+2026/02/16-12:34:19.061 ade307 Delete type=2 #303
+2026/02/16-12:34:19.061 ade307 Delete type=2 #299
+2026/02/16-12:34:19.061 ade307 Delete type=2 #297
+2026/02/16-12:34:19.061 ade307 Delete type=2 #295
