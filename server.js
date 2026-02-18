@@ -988,48 +988,163 @@ app.post('/api/sms/webhook', async (req, res) => {
       }
     }
 
-    // Search knowledge base for relevant info
-    let knowledgeContext = '';
+    // ==========================================
+    // CRM LOOKUP — Know who's texting
+    // ==========================================
+    const cleanPhone = From.replace(/\D/g, '').slice(-10);
+    let callerInfo = null;
+    try {
+      const { data: crmHits } = await supabase.from('crm_contacts')
+        .select('id, first_name, last_name, team_name, age_group, city, state, email')
+        .or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone)
+        .eq('is_active', true)
+        .limit(1);
+      if (crmHits && crmHits.length > 0) callerInfo = crmHits[0];
+    } catch (err) { console.error('CRM lookup error:', err.message); }
 
+    console.log(callerInfo 
+      ? `👤 Known caller: ${callerInfo.first_name} ${callerInfo.last_name} (${callerInfo.team_name || 'no team'}, ${callerInfo.age_group || 'no age'})`
+      : `❓ Unknown caller: ${From}`);
+
+    // If caller has an age group and no age filter was detected in message, auto-apply it
+    if (callerInfo && callerInfo.age_group && !bodyLower.match(/(\d{1,2})\s*u\b/)) {
+      console.log(`🎯 Auto-applying age group ${callerInfo.age_group} from CRM`);
+    }
+
+    // ==========================================
+    // CONVERSATION HISTORY — last 10 messages for context
+    // ==========================================
+    let conversationHistory = '';
+    try {
+      const { data: history } = await supabase.from('sms_log')
+        .select('question, response, created_at')
+        .eq('phone_from', From)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (history && history.length > 0) {
+        conversationHistory = history.reverse().map(m => {
+          const parts = [];
+          if (m.question && !m.question.startsWith('[')) parts.push('Coach: ' + m.question);
+          if (m.response) parts.push('You: ' + m.response);
+          return parts.join('\n');
+        }).filter(Boolean).join('\n');
+      }
+    } catch (err) { console.error('History load error:', err.message); }
+
+    // ==========================================
+    // KNOWLEDGE BASE SEARCH
+    // ==========================================
+    let knowledgeContext = '';
     console.log('🔍 Searching knowledge base for:', Body);
     const { data: kbResults, error: kbError } = await supabase
       .rpc('search_knowledge_base', { search_query: Body });
-
     console.log('📚 KB Results:', kbResults?.length || 0, 'Error:', kbError?.message || 'none');
 
     if (!kbError && kbResults && kbResults.length > 0) {
-      knowledgeContext = '\n\nRelevant Florida USSSA information:\n' +
+      knowledgeContext = '\n\nRelevant USSSA information:\n' +
         kbResults.map(kb =>
           `[${kb.category.toUpperCase()}] ${kb.title}:\n${kb.content}`
         ).join('\n\n');
     }
 
-    // Generate AI response using Claude
+    // ==========================================
+    // CHECK FOR UNKNOWN CALLER INFO COLLECTION
+    // ==========================================
+    let collectingInfo = false;
+    if (!callerInfo) {
+      const pendingRequest = await checkPendingInfoRequest(From);
+      
+      if (pendingRequest) {
+        // They're replying to our info request — try to parse their response
+        const parsed = parseContactInfo(Body);
+        if (parsed.firstName) {
+          await saveContactFromReply(From, parsed);
+          console.log(`✅ Collected contact info: ${parsed.firstName} ${parsed.lastName || ''} - ${parsed.teamName || 'no team'}`);
+          // Re-lookup so the AI knows them now
+          const { data: newHits } = await supabase.from('crm_contacts')
+            .select('id, first_name, last_name, team_name, age_group, city, state, email')
+            .or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone)
+            .limit(1);
+          if (newHits && newHits.length > 0) callerInfo = newHits[0];
+        }
+      } else if (!tournamentContext) {
+        // First message from unknown number — ask for info
+        collectingInfo = true;
+        const askInfoResponse = "Hey there! I'd be happy to help. Quick question — what's your name and what team are you with? That way I can make sure you get the best info for your age group. 🏟️";
+
+        // Log the info request
+        await supabase.from('sms_log').insert({
+          phone_from: From, phone_to: To,
+          question: '[System] Requested contact info',
+          response: askInfoResponse,
+          status: 'collecting_info'
+        });
+
+        // Also log their actual message
+        await supabase.from('sms_log').insert({
+          phone_from: From, phone_to: To,
+          question: Body, response: null,
+          status: 'pending_info'
+        });
+
+        await twilioClient.messages.create({ body: askInfoResponse, from: To, to: From });
+        console.log('📋 Asked unknown caller for contact info');
+        res.status(200).send('<Response></Response>');
+        return;
+      }
+    }
+
+    // ==========================================
+    // BUILD SMART AI PROMPT
+    // ==========================================
+    const callerBlock = callerInfo
+      ? `CALLER INFO (from our database):
+- Name: ${callerInfo.first_name} ${callerInfo.last_name}
+- Team: ${callerInfo.team_name || 'Not on file'}
+- Age Group: ${callerInfo.age_group || 'Not on file'}
+- Location: ${callerInfo.city || 'Unknown'}${callerInfo.state ? ', ' + callerInfo.state : ''}
+USE their first name naturally in your response. If they ask about tournaments and didn't specify an age group, prioritize their age group (${callerInfo.age_group || 'unknown'}).`
+      : `UNKNOWN CALLER (phone: ${From}). We just asked for their info or they provided it. Be friendly and helpful.`;
+
+    const systemPrompt = `You are the text messaging assistant for Florida USSSA Baseball. You help coaches and parents with tournament info, registration, schedules, rules, and general questions via text message.
+
+PERSONALITY:
+- Friendly, knowledgeable about youth baseball in Florida
+- Text like a real person — casual but professional  
+- Use their first name when you know it
+- Sound like someone who works in the USSSA office, not a corporate chatbot
+- One emoji max per message, and only if it feels natural
+
+${callerBlock}
+
+${conversationHistory ? 'RECENT CONVERSATION HISTORY:\n' + conversationHistory + '\n\nUse this history to understand follow-up questions. If they say "how much?" or "what time?" — refer back to what was discussed.' : '(First message from this number)'}
+
+${tournamentContext || ''}
+
+${knowledgeContext || ''}
+
+RESPONSE RULES:
+- Keep responses under 300 characters when possible (2 text messages max)
+- For tournament lists, keep to the top 3 closest/soonest and mention if there are more
+- Be SPECIFIC — give dates, locations, prices, director names when you have the data
+- If tournaments are listed above with distance info, mention how far each one is
+- If you have the answer from tournament data or knowledge base, GIVE it — don't punt
+- If you genuinely cannot answer, say: "Let me check on that and have someone get back to you shortly!"
+- NEVER make up tournament dates, prices, or locations
+- Do NOT end every message with "feel free to reach out" — only say it occasionally when it feels natural
+- Match the energy of their message — short question gets a short answer`;
+
+    // ==========================================
+    // CALL CLAUDE
+    // ==========================================
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
+      max_tokens: 1024,
+      system: systemPrompt,
       messages: [{
         role: 'user',
-        content: `You are a 50-65 year old Florida USSSA baseball tournament director responding to a coach's text message.
-
-Coach's message: "${Body}"
-
-${tournamentContext}
-
-${knowledgeContext}
-
-Instructions:
-- If tournaments are listed above, use that specific information in your response
-- If distance info is included, mention how far each tournament is
-- If USSSA rules, policies, or FAQ info is provided above, use that to answer accurately
-- Give actual dates, locations, pricing, and directors when available
-- Keep it VERY brief (1-2 short sentences max, under 160 characters total)
-- If there are more than 3 tournaments, list the closest/soonest 3 and say how many more are available
-- Sound natural and friendly, like you're texting back personally
-- ALWAYS end with: "If you have any other questions, feel free to reach out!"
-- If you don't have specific info about their question, say: "Let me have someone from the office get back to you on that. They'll reach out shortly!"
-
-Respond as if you're texting back personally.`
+        content: Body
       }]
     });
 
@@ -1037,7 +1152,7 @@ Respond as if you're texting back personally.`
     console.log('🤖 Claude response:', aiResponse);
 
     // Determine status
-    const isForwarded = aiResponse.toLowerCase().includes('office get back to you') ||
+    const isForwarded = aiResponse.toLowerCase().includes('get back to you') ||
                         aiResponse.toLowerCase().includes('reach out shortly');
 
     // Log to sms_log table
@@ -1048,6 +1163,8 @@ Respond as if you're texting back personally.`
         phone_to: To,
         question: Body,
         response: aiResponse,
+        contact_name: callerInfo ? `${callerInfo.first_name} ${callerInfo.last_name}` : null,
+        team_name: callerInfo ? callerInfo.team_name : null,
         status: isForwarded ? 'forwarded' : 'answered'
       });
     if (logError) console.error('📝 SMS log error:', logError.message);
@@ -1055,13 +1172,15 @@ Respond as if you're texting back personally.`
 
     // Forward unanswered questions to office
     if (isForwarded) {
+      const callerLabel = callerInfo 
+        ? `${callerInfo.first_name} ${callerInfo.last_name} (${callerInfo.team_name || 'no team'})` 
+        : 'UNKNOWN';
       await twilioClient.messages.create({
-        body: `🚨 UNANSWERED QUESTION 🚨\n\nFrom: ${From}\nQuestion: ${Body}\n\nClaude's response: ${aiResponse}`,
+        body: `🚨 NEEDS FOLLOW-UP\nFrom: ${From} (${callerLabel})\nQ: ${Body}\nAI said: ${aiResponse}`,
         from: To,
-        to: '+16308647869' // YOUR PHONE NUMBER
+        to: '+16308647869'
       });
-
-      console.log('📬 Forwarded unanswered question to office');
+      console.log('📬 Forwarded to office');
     }
 
     // Send response via Twilio
