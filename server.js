@@ -28,6 +28,112 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
+// ─── AUTO CONTACT COLLECTION ─────────────────────────────
+async function lookupContact(phone) {
+  const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+  try {
+    const { data } = await supabase.from('crm_contacts')
+      .select('id, first_name, last_name, team_name, age_group, email')
+      .or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone)
+      .limit(1);
+    return (data && data.length > 0) ? data[0] : null;
+  } catch (err) {
+    console.error('Contact lookup error:', err.message);
+    return null;
+  }
+}
+
+async function checkPendingInfoRequest(phone) {
+  const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+  try {
+    const { data } = await supabase.from('sms_log')
+      .select('created_at')
+      .eq('phone_from', phone)
+      .like('question', '%[System] Requested contact info%')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (!data || data.length === 0) return false;
+    // Check if request was within last 24 hours
+    const requestTime = new Date(data[0].created_at);
+    const now = new Date();
+    return (now - requestTime) < 24 * 60 * 60 * 1000;
+  } catch (err) { return false; }
+}
+
+function parseContactInfo(text) {
+  // Try to parse name, team, and age group from a reply
+  const lines = text.split(/[\n,;]+/).map(l => l.trim()).filter(l => l);
+  let firstName = null, lastName = null, teamName = null, ageGroup = null;
+  
+  // Look for age group pattern anywhere in text
+  const ageMatch = text.match(/\b(\d{1,2})[uU]\b/);
+  if (ageMatch) ageGroup = ageMatch[1] + 'U';
+  
+  // Try parsing structured replies (numbered lines)
+  for (const line of lines) {
+    const cleaned = line.replace(/^[1-3][.)\s-]+/, '').trim();
+    if (!cleaned) continue;
+    
+    // Check if this line looks like a name (2-3 words, no numbers except jersey)
+    const nameCheck = cleaned.replace(/^(coach|Coach|COACH)\s+/i, '');
+    const words = nameCheck.split(/\s+/);
+    if (!firstName && words.length >= 1 && words.length <= 4 && !/\d{2,}/.test(nameCheck) && !/[uU]$/.test(nameCheck)) {
+      firstName = words[0];
+      lastName = words.slice(1).join(' ') || null;
+      continue;
+    }
+    
+    // Check if this looks like a team name (longer, may have location words)
+    if (!teamName && cleaned.length > 2 && cleaned !== ageGroup) {
+      // Skip if it's just the age group
+      if (!cleaned.match(/^\d{1,2}[uU]$/)) {
+        teamName = cleaned;
+      }
+    }
+  }
+  
+  return { firstName, lastName, teamName, ageGroup };
+}
+
+async function saveContactFromReply(phone, info) {
+  const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+  const fullPhone = '+1' + cleanPhone;
+  
+  try {
+    // Check if already exists
+    const { data: existing } = await supabase.from('crm_contacts')
+      .select('id')
+      .or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone)
+      .limit(1);
+    
+    if (existing && existing.length > 0) {
+      const updates = {};
+      if (info.firstName) updates.first_name = info.firstName;
+      if (info.lastName) updates.last_name = info.lastName;
+      if (info.teamName) updates.team_name = info.teamName;
+      if (info.ageGroup) updates.age_group = info.ageGroup;
+      await supabase.from('crm_contacts').update(updates).eq('id', existing[0].id);
+      console.log('Updated contact:', info.firstName, info.lastName, phone);
+    } else {
+      await supabase.from('crm_contacts').insert({
+        first_name: info.firstName || null,
+        last_name: info.lastName || null,
+        phone: fullPhone,
+        team_name: info.teamName || null,
+        age_group: info.ageGroup || null,
+        is_active: true,
+        source: 'sms_auto_collected'
+      });
+      console.log('Created contact:', info.firstName, info.lastName, phone);
+    }
+    return true;
+  } catch (err) {
+    console.error('Save contact error:', err.message);
+    return false;
+  }
+}
+
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -1516,6 +1622,27 @@ app.get("/api/email/templates", async (req, res) => {
 app.get("/unsubscribe/:contactId", async (req, res) => {
   await supabase.from("crm_contacts").update({ opted_out: true, opted_out_at: new Date().toISOString() }).eq("id", req.params.contactId);
   res.send("<html><body style=\"font-family:Arial;text-align:center;padding:60px;background:#0a0e1a;color:#eee;\"><h2>Unsubscribed</h2><p>You will not receive any more emails from us.</p></body></html>");
+});
+
+
+// ─── SEND SMS ENDPOINT (for dashboard) ─────────────────
+app.post('/api/send-sms', async (req, res) => {
+  try {
+    const { to, message } = req.body;
+    if (!to || !message) return res.status(400).json({ error: 'Missing to or message' });
+    
+    const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to.startsWith('+') ? to : '+1' + to.replace(/\D/g, '').slice(-10)
+    });
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Send SMS error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
