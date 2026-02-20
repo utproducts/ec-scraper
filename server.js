@@ -641,6 +641,15 @@ app.post('/api/sms/webhook', async (req, res) => {
             if (ecUpdateErr) console.error('ec_teams GC update error:', ecUpdateErr.message);
             else console.log(`✅ Updated ec_teams.gc_team_id for ${phoneMatch.name}`);
           }
+          // Also update crm_contacts GC status
+const { error: crmGcErr } = await supabase.from('crm_contacts').update({
+  gc_team_id: gcTeamId,
+  gc_team_url: gcUrl,
+  gc_status: 'submitted',
+  gc_submitted_at: new Date().toISOString()
+}).or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone);
+if (crmGcErr) console.error('crm_contacts GC update error:', crmGcErr.message);
+else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
         }
       }
 

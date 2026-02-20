@@ -24,6 +24,7 @@
     "@supabase/supabase-js": "^2.95.3",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
+    "csv-parse": "^6.1.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "twilio": "^5.12.1"
