@@ -1858,6 +1858,144 @@ app.post('/api/send-sms', async (req, res) => {
   }
 });
 
+// ─── MULTI-TENANT MIGRATION ENDPOINT ──────────────────────
+// POST /api/admin/setup-multi-tenant?token=<ADMIN_SECRET>
+// Adds multi-tenant columns to directors table, sets admin roles,
+// and assigns director_id to existing ec_events.
+//
+// PRE-REQUISITE: Run this SQL in Supabase Dashboard SQL Editor FIRST
+// to create the exec_sql helper function (one-time setup):
+//
+//   CREATE OR REPLACE FUNCTION exec_sql(sql_text TEXT)
+//   RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+//   BEGIN EXECUTE sql_text; END; $$;
+//
+// If exec_sql doesn't exist, the DDL steps will be skipped and the
+// required SQL will be returned in the response for manual execution.
+//
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'mt-setup-2026';
+
+app.post('/api/admin/setup-multi-tenant', async (req, res) => {
+  const token = req.headers['authorization']?.replace('Bearer ', '') || req.query.token;
+  if (token !== ADMIN_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized. Provide token as query param or Bearer header.' });
+  }
+
+  const results = { ddl: [], dml: [], errors: [], summary: '' };
+  let ddlOk = 0, ddlSkipped = 0, dmlOk = 0;
+
+  // ─── STEP 1: DDL — Add columns to directors table ──────
+  const ddlStatements = [
+    { desc: 'directors.state', sql: "ALTER TABLE directors ADD COLUMN IF NOT EXISTS state TEXT" },
+    { desc: 'directors.twilio_phone', sql: "ALTER TABLE directors ADD COLUMN IF NOT EXISTS twilio_phone TEXT" },
+    { desc: 'directors.twilio_sid', sql: "ALTER TABLE directors ADD COLUMN IF NOT EXISTS twilio_sid TEXT" },
+    { desc: 'directors.role', sql: "ALTER TABLE directors ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'director'" },
+  ];
+
+  for (const stmt of ddlStatements) {
+    try {
+      const { error } = await supabase.rpc('exec_sql', { sql_text: stmt.sql });
+      if (error) throw error;
+      results.ddl.push({ column: stmt.desc, status: 'added' });
+      ddlOk++;
+    } catch (err) {
+      results.ddl.push({ column: stmt.desc, status: 'manual_required', error: err.message });
+      ddlSkipped++;
+    }
+  }
+
+  // ─── STEP 2: DML — Set admin roles for Chad, Steve, John ──
+  try {
+    // Fetch all directors to find them by name or email
+    const { data: allDirectors, error: dirErr } = await supabase
+      .from('directors')
+      .select('id, name, email');
+    if (dirErr) throw dirErr;
+
+    const adminKeywords = ['chad', 'steve', 'john'];
+    const admins = (allDirectors || []).filter(d => {
+      const name = (d.name || '').toLowerCase();
+      const email = (d.email || '').toLowerCase();
+      return adminKeywords.some(k => name.includes(k) || email.includes(k));
+    });
+
+    if (admins.length === 0) {
+      results.dml.push({ step: 'Set admin roles', status: 'no_matches', note: 'No directors found matching Chad, Steve, or John' });
+    } else {
+      const adminIds = admins.map(a => a.id);
+      const { error: roleErr } = await supabase
+        .from('directors')
+        .update({ role: 'admin' })
+        .in('id', adminIds);
+      if (roleErr) throw roleErr;
+      results.dml.push({
+        step: 'Set admin roles',
+        status: 'ok',
+        directors: admins.map(a => ({ id: a.id, name: a.name, email: a.email }))
+      });
+      dmlOk++;
+    }
+  } catch (err) {
+    results.errors.push('Admin role update: ' + err.message);
+  }
+
+  // ─── STEP 3: DML — Set director_id on existing ec_events ──
+  try {
+    // Find Chad's director ID (he owns all current events)
+    const { data: chadDir, error: chadErr } = await supabase
+      .from('directors')
+      .select('id, name, email')
+      .or('name.ilike.%chad%,email.ilike.%chad%')
+      .limit(1);
+    if (chadErr) throw chadErr;
+
+    if (!chadDir || chadDir.length === 0) {
+      results.dml.push({ step: 'Set ec_events.director_id', status: 'skipped', note: 'Could not find Chad in directors table' });
+    } else {
+      const chadId = chadDir[0].id;
+
+      // Update ec_events where director_id is null
+      const { data: updated, error: evtErr } = await supabase
+        .from('ec_events')
+        .update({ director_id: chadId })
+        .is('director_id', null)
+        .select('id, name');
+      if (evtErr) throw evtErr;
+
+      results.dml.push({
+        step: 'Set ec_events.director_id',
+        status: 'ok',
+        director: { id: chadId, name: chadDir[0].name },
+        eventsUpdated: (updated || []).length,
+        events: (updated || []).map(e => e.name)
+      });
+      dmlOk++;
+    }
+  } catch (err) {
+    results.errors.push('ec_events director_id update: ' + err.message);
+  }
+
+  // ─── Build summary ──────────────────────────────────────
+  results.summary = `DDL: ${ddlOk} applied, ${ddlSkipped} need manual SQL. DML: ${dmlOk} completed. Errors: ${results.errors.length}.`;
+
+  if (ddlSkipped > 0) {
+    results.manualSql = [
+      '-- Run in Supabase Dashboard → SQL Editor:',
+      '',
+      '-- Step 0: Create exec_sql helper (one-time, enables future migrations)',
+      "CREATE OR REPLACE FUNCTION exec_sql(sql_text TEXT)",
+      "RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$",
+      "BEGIN EXECUTE sql_text; END; $$;",
+      '',
+      '-- Step 1: Add multi-tenant columns to directors',
+      ...ddlStatements.map(s => s.sql + ';')
+    ].join('\n');
+  }
+
+  console.log('[MIGRATION]', results.summary);
+  res.json(results);
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Unrivaled Connect server running on port ${PORT}`);
   console.log(`📱 Twilio configured for: ${process.env.TWILIO_ACCOUNT_SID}`);
