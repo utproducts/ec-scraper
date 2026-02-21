@@ -1765,7 +1765,14 @@ app.post('/api/send-sms', async (req, res) => {
       from: process.env.TWILIO_PHONE_NUMBER,
       to: to.startsWith('+') ? to : '+1' + to.replace(/\D/g, '').slice(-10)
     });
-    
+
+    await supabase.from('sms_log').insert({
+      phone_from: to,
+      response: message,
+      status: 'manual_reply',
+      created_at: new Date().toISOString()
+    });
+
     res.json({ success: true });
   } catch (err) {
     console.error('Send SMS error:', err.message);
