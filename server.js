@@ -1766,12 +1766,13 @@ app.post('/api/send-sms', async (req, res) => {
       to: to.startsWith('+') ? to : '+1' + to.replace(/\D/g, '').slice(-10)
     });
 
-    await supabase.from('sms_log').insert({
+    const { error: logError } = await supabase.from('sms_log').insert({
       phone_from: to,
       response: message,
       status: 'manual_reply',
       created_at: new Date().toISOString()
     });
+    if (logError) console.error('Failed to log outbound SMS:', logError.message);
 
     res.json({ success: true });
   } catch (err) {
