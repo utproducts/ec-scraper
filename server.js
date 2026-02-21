@@ -1768,6 +1768,7 @@ app.post('/api/send-sms', async (req, res) => {
 
     const { error: logError } = await supabase.from('sms_log').insert({
       phone_from: to,
+      phone_to: process.env.TWILIO_PHONE_NUMBER,
       response: message,
       status: 'manual_reply',
       created_at: new Date().toISOString()
