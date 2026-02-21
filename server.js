@@ -1766,6 +1766,7 @@ app.post('/api/send-sms', async (req, res) => {
       to: to.startsWith('+') ? to : '+1' + to.replace(/\D/g, '').slice(-10)
     });
 
+    console.log('Saving to sms_log, phone_to:', process.env.TWILIO_PHONE_NUMBER);
     const { error: logError } = await supabase.from('sms_log').insert({
       phone_from: to,
       phone_to: process.env.TWILIO_PHONE_NUMBER,
