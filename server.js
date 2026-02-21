@@ -588,7 +588,7 @@ app.post('/api/sms/webhook', async (req, res) => {
       // Search ec_teams FIRST (where CSV-uploaded teams live)
       const { data: ecTeamsMatch } = await supabase
         .from('ec_teams')
-        .select('id, team_name, coach_phone, age_group');
+        .select('id, team_name, coach_phone, age_group, gc_team_id');
       const { data: ecEventTeams } = await supabase
         .from('ec_event_teams')
         .select('team_id, event_id, age_group');
@@ -606,7 +606,8 @@ app.post('/api/sms/webhook', async (req, res) => {
         allSearchTeams.push({
           id: t.id, name: t.team_name, coach_phone: t.coach_phone,
           age_group: etLink?.age_group || t.age_group || '',
-          event_id: etLink?.event_id || '', source: 'ec_teams'
+          event_id: etLink?.event_id || '', source: 'ec_teams',
+          gc_team_id: t.gc_team_id || null
         });
       });
       (legacyTeams || []).forEach(t => {
@@ -619,37 +620,83 @@ app.post('/api/sms/webhook', async (req, res) => {
       const matchedTeams = allSearchTeams;
       
       if (matchedTeams) {
-        const phoneMatch = matchedTeams.find(t => {
+        // Get ALL teams matching this phone number (not just the first)
+        const phoneMatches = matchedTeams.filter(t => {
           const tp = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
           return tp && tp === cleanPhone;
         });
-        
-        if (phoneMatch) {
-          matchedTeamId = phoneMatch.id;
-          matchedTeamName = phoneMatch.name;
-          matchedAgeGroup = phoneMatch.age_group;
-          matchedEventId = phoneMatch.event_id;
+
+        if (phoneMatches.length === 1) {
+          // Single team for this coach — auto-assign
+          const match = phoneMatches[0];
+          matchedTeamId = match.id;
+          matchedTeamName = match.name;
+          matchedAgeGroup = match.age_group;
+          matchedEventId = match.event_id;
           gcStatus = 'matched';
-          console.log(`🔗 Auto-matched GC link by phone to team: ${phoneMatch.name} (${phoneMatch.age_group})`);
-          
-          // ALSO update ec_teams.gc_team_id so the scraper can use this link
-          if (phoneMatch.source === 'ec_teams') {
+          console.log(`🔗 Auto-matched GC link to team: ${match.name} (${match.age_group})`);
+
+          if (match.source === 'ec_teams') {
             const { error: ecUpdateErr } = await supabase.from('ec_teams').update({
-              gc_team_id: gcTeamId,
-              gc_team_link: gcUrl
-            }).eq('id', phoneMatch.id);
+              gc_team_id: gcTeamId, gc_team_link: gcUrl
+            }).eq('id', match.id);
             if (ecUpdateErr) console.error('ec_teams GC update error:', ecUpdateErr.message);
-            else console.log(`✅ Updated ec_teams.gc_team_id for ${phoneMatch.name}`);
+            else console.log(`✅ Updated ec_teams.gc_team_id for ${match.name}`);
           }
-          // Also update crm_contacts GC status
-const { error: crmGcErr } = await supabase.from('crm_contacts').update({
-  gc_team_id: gcTeamId,
-  gc_team_url: gcUrl,
-  gc_status: 'submitted',
-  gc_submitted_at: new Date().toISOString()
-}).or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone);
-if (crmGcErr) console.error('crm_contacts GC update error:', crmGcErr.message);
-else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
+          const { error: crmGcErr } = await supabase.from('crm_contacts').update({
+            gc_team_id: gcTeamId, gc_team_url: gcUrl,
+            gc_status: 'submitted', gc_submitted_at: new Date().toISOString()
+          }).or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone);
+          if (crmGcErr) console.error('crm_contacts GC update error:', crmGcErr.message);
+          else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
+
+        } else if (phoneMatches.length > 1) {
+          // Multiple teams for this coach — smart matching
+          console.log(`🔍 Coach has ${phoneMatches.length} teams: ${phoneMatches.map(t => t.name).join(', ')}`);
+
+          // Check if this exact GC link is already assigned to one of their teams
+          const alreadyHasThisLink = phoneMatches.find(t => t.gc_team_id === gcTeamId);
+          if (alreadyHasThisLink) {
+            matchedTeamId = alreadyHasThisLink.id;
+            matchedTeamName = alreadyHasThisLink.name;
+            matchedAgeGroup = alreadyHasThisLink.age_group;
+            matchedEventId = alreadyHasThisLink.event_id;
+            gcStatus = 'matched';
+            console.log(`🔗 GC link already assigned to ${alreadyHasThisLink.name} — confirming`);
+          } else {
+            // Find teams that don't have ANY GC link yet
+            const unlinkedTeams = phoneMatches.filter(t => !t.gc_team_id);
+
+            if (unlinkedTeams.length === 1) {
+              // Only one team still needs a GC link — assign to it
+              const match = unlinkedTeams[0];
+              matchedTeamId = match.id;
+              matchedTeamName = match.name;
+              matchedAgeGroup = match.age_group;
+              matchedEventId = match.event_id;
+              gcStatus = 'matched';
+              console.log(`🔗 Auto-matched to only unlinked team: ${match.name}`);
+
+              if (match.source === 'ec_teams') {
+                const { error: ecUpdateErr } = await supabase.from('ec_teams').update({
+                  gc_team_id: gcTeamId, gc_team_link: gcUrl
+                }).eq('id', match.id);
+                if (ecUpdateErr) console.error('ec_teams GC update error:', ecUpdateErr.message);
+                else console.log(`✅ Updated ec_teams.gc_team_id for ${match.name}`);
+              }
+              const { error: crmGcErr } = await supabase.from('crm_contacts').update({
+                gc_team_id: gcTeamId, gc_team_url: gcUrl,
+                gc_status: 'submitted', gc_submitted_at: new Date().toISOString()
+              }).or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone);
+              if (crmGcErr) console.error('crm_contacts GC update error:', crmGcErr.message);
+
+            } else {
+              // Multiple unlinked teams OR all teams already linked — ask coach
+              gcStatus = 'pending_team_selection';
+              const teamNames = phoneMatches.map(t => `${t.name} (${t.age_group})`).join(', ');
+              console.log(`❓ Ambiguous — ${unlinkedTeams.length} unlinked teams of ${phoneMatches.length} total — asking coach. Teams: ${teamNames}`);
+            }
+          }
         }
       }
 
@@ -685,15 +732,36 @@ else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
                 
                 // Now try to find the team within this event by phone
                 if (matchedTeams) {
-                  const eventTeamMatch = matchedTeams.find(t => 
-                    t.event_id === event.id && 
+                  const eventPhoneMatches = matchedTeams.filter(t =>
+                    t.event_id === event.id &&
                     (t.coach_phone || '').replace(/\D/g, '').slice(-10) === cleanPhone
                   );
-                  if (eventTeamMatch) {
-                    matchedTeamId = eventTeamMatch.id;
-                    matchedTeamName = eventTeamMatch.name;
-                    matchedAgeGroup = eventTeamMatch.age_group;
+                  if (eventPhoneMatches.length === 1) {
+                    const etm = eventPhoneMatches[0];
+                    matchedTeamId = etm.id;
+                    matchedTeamName = etm.name;
+                    matchedAgeGroup = etm.age_group;
                     gcStatus = 'matched';
+                    if (etm.source === 'ec_teams') {
+                      await supabase.from('ec_teams').update({ gc_team_id: gcTeamId, gc_team_link: gcUrl }).eq('id', etm.id);
+                      console.log(`✅ Updated ec_teams.gc_team_id for ${etm.name} (event context)`);
+                    }
+                  } else if (eventPhoneMatches.length > 1) {
+                    // Prefer unlinked team
+                    const unlinked = eventPhoneMatches.filter(t => !t.gc_team_id);
+                    if (unlinked.length === 1) {
+                      matchedTeamId = unlinked[0].id;
+                      matchedTeamName = unlinked[0].name;
+                      matchedAgeGroup = unlinked[0].age_group;
+                      gcStatus = 'matched';
+                      if (unlinked[0].source === 'ec_teams') {
+                        await supabase.from('ec_teams').update({ gc_team_id: gcTeamId, gc_team_link: gcUrl }).eq('id', unlinked[0].id);
+                        console.log(`✅ Updated ec_teams.gc_team_id for ${unlinked[0].name} (event context, unlinked)`);
+                      }
+                    } else {
+                      gcStatus = 'pending_team_selection';
+                      console.log(`❓ Multiple teams in event for this coach — asking`);
+                    }
                   }
                 }
                 break;
@@ -723,6 +791,14 @@ else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
       let gcResponse;
       if (gcStatus === 'matched') {
         gcResponse = `Thanks Coach! Got your GameChanger link for ${matchedTeamName}. We'll get those stats posted to the state site! 🏟️`;
+      } else if (gcStatus === 'pending_team_selection') {
+        // List the coach's teams so they can pick
+        const phoneMatchList = matchedTeams.filter(t => {
+          const tp = (t.coach_phone || '').replace(/\D/g, '').slice(-10);
+          return tp && tp === cleanPhone;
+        });
+        const teamList = phoneMatchList.map((t, i) => `${i + 1}. ${t.name} (${t.age_group})`).join('\n');
+        gcResponse = `Thanks for the GC link! You have multiple teams on file. Which team is this link for?\n\n${teamList}\n\nJust reply with the team name or number.`;
       } else if (matchedEventId) {
         gcResponse = `Thanks! Got your GameChanger link. Which team is this for? Just reply with the team name and we'll get it matched up! 🏟️`;
       } else {
@@ -1006,7 +1082,6 @@ else console.log(`✅ Updated crm_contacts GC status for ${cleanPhone}`);
       const { data: crmHits } = await supabase.from('crm_contacts')
         .select('id, first_name, last_name, team_name, age_group, city, state, email')
         .or('phone.like.%' + cleanPhone + ',phone2.like.%' + cleanPhone)
-        .eq('is_active', true)
         .limit(1);
       if (crmHits && crmHits.length > 0) callerInfo = crmHits[0];
     } catch (err) { console.error('CRM lookup error:', err.message); }
