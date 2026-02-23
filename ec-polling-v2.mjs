@@ -265,10 +265,11 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
   const p = pg || page;
   const discovered = [];
   const logLines = [];
+  let phase1Count = 0;
 
   const addLine = (line) => { console.log(line); logLines.push(line); };
 
-  // Attach response listener
+  // Attach response listener BEFORE any navigation
   const responseHandler = async (response) => {
     const url = response.url();
     const ct = response.headers()['content-type'] || '';
@@ -299,23 +300,16 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
 
   p.on('response', responseHandler);
 
+  // ── Phase 1: Navigate directly to schedule URL ──
   try {
-    // ── Phase 1: Team schedule page ──
+    const scheduleUrl = teamUrl.replace(/\/?$/, '') + '/schedule';
     addLine('='.repeat(70));
     addLine('PHASE 1: TEAM SCHEDULE PAGE');
-    addLine('URL: ' + teamUrl);
+    addLine('URL: ' + scheduleUrl);
     addLine('='.repeat(70));
 
-    await p.goto(teamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(4000);
-
-    // Click schedule tab
-    const scheduleLink = await p.$('a[href*="/schedule"]');
-    if (scheduleLink) {
-      addLine('\n--- Clicking SCHEDULE tab ---\n');
-      await scheduleLink.click();
-      await sleep(4000);
-    }
+    await p.goto(scheduleUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(5000);
 
     // Scroll to trigger lazy loads
     await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -323,12 +317,19 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
     await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await sleep(2000);
 
-    const phase1Count = discovered.length;
+    phase1Count = discovered.length;
     addLine(`\n--- Phase 1 complete: ${phase1Count} JSON responses captured ---\n`);
+  } catch(e) {
+    addLine(`\n--- Phase 1 FAILED: ${e.message} ---\n`);
+    addLine(`   Continuing to Phase 2...\n`);
+  }
 
-    // ── Phase 2: Find one box score page and navigate to it ──
+  // ── Phase 2: Find a box score URL from the page and navigate directly ──
+  let boxScoreUrl = null;
+  try {
     const gameLinks = await p.evaluate(() => {
       const links = [];
+      // Try primary selector
       const els = document.querySelectorAll('a[class*="ScheduleListByMonth__event"]');
       for (const el of els) {
         const href = el.href || el.getAttribute('href') || '';
@@ -338,18 +339,37 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
           links.push(fullUrl);
         }
       }
+      // Fallback: any schedule link with UUID
+      if (links.length === 0) {
+        const fallback = document.querySelectorAll('a[href*="/schedule/"]');
+        for (const el of fallback) {
+          const href = el.href || el.getAttribute('href') || '';
+          if (href.match(/\/schedule\/[a-f0-9-]{20,}/)) {
+            let fullUrl = href.startsWith('http') ? href : window.location.origin + href;
+            if (!fullUrl.includes('/box-score')) fullUrl += '/box-score';
+            links.push(fullUrl);
+          }
+        }
+      }
       return links;
     });
 
     if (gameLinks.length > 0) {
-      const boxScoreUrl = gameLinks[0];
+      boxScoreUrl = gameLinks[0];
+    }
+  } catch(e) {
+    addLine(`\n--- Could not extract game links: ${e.message} ---\n`);
+  }
+
+  if (boxScoreUrl) {
+    try {
       addLine('='.repeat(70));
       addLine('PHASE 2: BOX SCORE PAGE');
       addLine('URL: ' + boxScoreUrl);
       addLine('='.repeat(70));
 
       await p.goto(boxScoreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await sleep(7000); // box score pages take longer to render
+      await sleep(8000);
 
       // Scroll to trigger any lazy-loaded stats
       await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -357,42 +377,44 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
 
       const phase2Count = discovered.length - phase1Count;
       addLine(`\n--- Phase 2 complete: ${phase2Count} JSON responses captured ---\n`);
-    } else {
-      addLine('\n--- No game links found on schedule, skipping Phase 2 ---\n');
+    } catch(e) {
+      addLine(`\n--- Phase 2 FAILED: ${e.message} ---\n`);
     }
-
-    // ── Summary ──
-    addLine('='.repeat(70));
-    addLine('SUMMARY: ' + discovered.length + ' total JSON endpoints discovered');
-    addLine('='.repeat(70));
-
-    // Dedupe by URL pattern (strip query params for grouping)
-    const byPattern = {};
-    for (const d of discovered) {
-      const base = d.url.split('?')[0];
-      if (!byPattern[base]) byPattern[base] = [];
-      byPattern[base].push(d);
-    }
-
-    addLine('\nUnique URL patterns (' + Object.keys(byPattern).length + '):\n');
-    for (const [pattern, entries] of Object.entries(byPattern)) {
-      addLine(`  ${pattern}`);
-      addLine(`    Hit ${entries.length}x | Status: ${entries[0].status} | Size: ${entries[0].bodySize} bytes`);
-      addLine(`    Preview: ${entries[0].bodyPreview.substring(0, 120)}`);
-      addLine('');
-    }
-
-    // Write to log file
-    const logContent = logLines.join('\n') + '\n\n' +
-      'RAW ENTRIES:\n' + JSON.stringify(discovered, null, 2);
-
-    fs.writeFileSync('gc-api-discovery.log', logContent);
-    addLine('\n📝 Written to gc-api-discovery.log');
-
-    return { discovered, patterns: Object.keys(byPattern), logFile: 'gc-api-discovery.log' };
-  } finally {
-    p.removeListener('response', responseHandler);
+  } else {
+    addLine('\n--- No game links found on schedule, skipping Phase 2 ---\n');
   }
+
+  // ── Summary ──
+  p.removeListener('response', responseHandler);
+
+  addLine('='.repeat(70));
+  addLine('SUMMARY: ' + discovered.length + ' total JSON endpoints discovered');
+  addLine('='.repeat(70));
+
+  // Dedupe by URL pattern (strip query params for grouping)
+  const byPattern = {};
+  for (const d of discovered) {
+    const base = d.url.split('?')[0];
+    if (!byPattern[base]) byPattern[base] = [];
+    byPattern[base].push(d);
+  }
+
+  addLine('\nUnique URL patterns (' + Object.keys(byPattern).length + '):\n');
+  for (const [pattern, entries] of Object.entries(byPattern)) {
+    addLine(`  ${pattern}`);
+    addLine(`    Hit ${entries.length}x | Status: ${entries[0].status} | Size: ${entries[0].bodySize} bytes`);
+    addLine(`    Preview: ${entries[0].bodyPreview.substring(0, 120)}`);
+    addLine('');
+  }
+
+  // Write to log file
+  const logContent = logLines.join('\n') + '\n\n' +
+    'RAW ENTRIES:\n' + JSON.stringify(discovered, null, 2);
+
+  try { fs.writeFileSync('gc-api-discovery.log', logContent); } catch(e) { addLine('⚠️ Could not write log file: ' + e.message); }
+  addLine('\n📝 Written to gc-api-discovery.log');
+
+  return { discovered, patterns: Object.keys(byPattern), logFile: 'gc-api-discovery.log' };
 }
 
 // ─── DISCOVER GAMES FROM TEAM SCHEDULE ───────────────────────
