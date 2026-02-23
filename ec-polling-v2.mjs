@@ -125,6 +125,11 @@ async function createSessionBrowser(sessionId) {
   const baseProfile = './gc-browser-data';
   if (existsSync(baseProfile)) {
     cpSync(baseProfile, profileDir, { recursive: true });
+    // Remove Chrome lock files copied from the base profile
+    for (const lockFile of ['SingletonLock', 'SingletonSocket', 'SingletonCookie']) {
+      const f = path.join(profileDir, lockFile);
+      try { rmSync(f, { force: true }); } catch(e) {}
+    }
   }
   const br = await puppeteer.launch({
     headless: 'new',
