@@ -24,7 +24,7 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV NODE_ENV=production
 
 WORKDIR /app
-COPY package*.json ./
+COPY package-scraper.json ./package.json
 RUN npm ci --omit=dev
 COPY ec-polling-v2.mjs ./
 COPY ec-scraper-service.mjs ./

@@ -1,0 +1,10 @@
+{
+  "name": "ec-scraper-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "start": "node ec-scraper-service.mjs" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "puppeteer": "^22.0.0"
+  }
+}
