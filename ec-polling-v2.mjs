@@ -1045,6 +1045,7 @@ async function pollOnce(teams, ctx) {
 export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
          createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
          discoverGcApiEndpoints,
+         findOrCreateTeam, findOrCreatePlayer, calculatePOTG, normalizeTeamName,
          allGamesFinalSince, AUTO_STOP_DELAY };
 
 // ─── STANDALONE MODE (run directly) ──────────────────────────

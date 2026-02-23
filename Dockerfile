@@ -27,6 +27,7 @@ WORKDIR /app
 COPY package-scraper.json ./package.json
 RUN npm install --omit=dev
 COPY ec-polling-v2.mjs ./
+COPY ec-scraper-fetch.mjs ./
 COPY ec-scraper-service.mjs ./
 COPY ec-teams.txt ./
 COPY gc-browser-data/ /app/gc-browser-data-seed/

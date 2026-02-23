@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
          createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
          discoverGcApiEndpoints } from './ec-polling-v2.mjs';
+import { pollTeams, getGcToken } from './ec-scraper-fetch.mjs';
 
 // Prevent Chrome crashes from killing the service
 process.on('uncaughtException', (err) => {
@@ -29,9 +30,14 @@ let allGamesFinalSince = null;
 const AUTO_STOP_DELAY = 60; // minutes after all games final
 const POLL_INTERVAL = 10; // minutes between cycles
 
-// ─── MULTI-EVENT SESSION STATE ──────────────────────────────
+// ─── MULTI-EVENT SESSION STATE (v1 — Puppeteer) ─────────────
 const activeSessions = new Map(); // eventId → session object
 const MAX_SESSIONS = 6;
+
+// ─── FETCH-BASED SESSION STATE (v2 — no browser) ────────────
+const fetchSessions = new Map(); // eventId → v2 session object
+const MAX_FETCH_SESSIONS = 50;
+const FETCH_POLL_INTERVAL = 5; // minutes between v2 cycles
 
 const log = (msg) => {
   const entry = '[' + new Date().toISOString() + '] ' + msg;
@@ -231,6 +237,99 @@ async function stopSession(eventId) {
   activeSessions.delete(eventId);
 }
 
+// ─── FETCH-BASED SESSION MANAGEMENT (v2) ────────────────────
+
+async function startFetchSession(eventId, teams, eventName) {
+  if (fetchSessions.has(eventId)) {
+    return { error: 'Event ' + eventId + ' already scraping (v2)' };
+  }
+  if (fetchSessions.size >= MAX_FETCH_SESSIONS) {
+    return { error: 'Max ' + MAX_FETCH_SESSIONS + ' concurrent fetch sessions reached' };
+  }
+
+  const session = {
+    eventId, eventName, teams,
+    type: 'v2',
+    status: 'running',
+    pollInterval: null,
+    allGamesFinalSince: null,
+    log: [],
+    startedAt: Date.now(),
+    lastCycleAt: null,
+    totalGames: 0,
+    newGames: 0,
+  };
+
+  const slog = (msg) => {
+    const entry = '[' + new Date().toISOString() + '] [v2:' + eventName + '] ' + msg;
+    console.log(entry);
+    session.log.push(entry);
+    if (session.log.length > 200) session.log.shift();
+    log(entry);
+  };
+  session.slog = slog;
+
+  fetchSessions.set(eventId, session);
+
+  try {
+    slog('🚀 Starting fetch session...');
+
+    // Ensure gc-token is available (obtains once, then cached)
+    await getGcToken();
+    slog('✅ GC token ready');
+    slog('📋 ' + teams.length + ' teams for ' + eventName);
+
+    // First cycle
+    try { await runFetchCycle(session); }
+    catch(e) { slog('❌ First cycle error: ' + e.message); }
+
+    // Start polling
+    session.pollInterval = setInterval(async () => {
+      try {
+        if (session.allGamesFinalSince && (Date.now() - session.allGamesFinalSince) >= AUTO_STOP_DELAY * 60000) {
+          slog('🛑 AUTO-STOP: All games final for ' + AUTO_STOP_DELAY + '+ min');
+          await stopFetchSession(eventId);
+          return;
+        }
+        await runFetchCycle(session);
+      } catch(e) { slog('❌ Cycle error: ' + e.message); }
+    }, FETCH_POLL_INTERVAL * 60 * 1000);
+
+    return { status: 'started', teamsLoaded: teams.length, event: eventName };
+  } catch(e) {
+    session.status = 'error';
+    slog('❌ Start error: ' + e.message);
+    fetchSessions.delete(eventId);
+    return { error: e.message };
+  }
+}
+
+async function runFetchCycle(session) {
+  const result = await pollTeams(session.teams, session.slog);
+  session.lastCycleAt = Date.now();
+  session.totalGames = result.totalGames;
+  session.newGames += result.newGames;
+
+  if (result.totalGames > 0 && result.liveOrUpcoming === 0) {
+    if (!session.allGamesFinalSince) {
+      session.allGamesFinalSince = Date.now();
+      session.slog('🏁 All games FINAL — auto-stop in ' + AUTO_STOP_DELAY + ' min');
+    }
+  } else {
+    session.allGamesFinalSince = null;
+  }
+  return result;
+}
+
+async function stopFetchSession(eventId) {
+  const session = fetchSessions.get(eventId);
+  if (!session) return;
+  if (session.pollInterval) clearInterval(session.pollInterval);
+  session.status = 'stopped';
+  if (session.slog) session.slog('🛑 Fetch session stopped');
+  fetchSessions.delete(eventId);
+}
+
 // ─── HTTP SERVER ─────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -246,19 +345,32 @@ const server = http.createServer(async (req, res) => {
   if (path === '/health') {
     const sessions = [];
     for (const [eid, s] of activeSessions) {
-      sessions.push({ eventId: eid, eventName: s.eventName, status: s.status, teams: s.teams.length, startedAt: new Date(s.startedAt).toISOString() });
+      sessions.push({ eventId: eid, eventName: s.eventName, type: 'v1', status: s.status, teams: s.teams.length, startedAt: new Date(s.startedAt).toISOString() });
+    }
+    for (const [eid, s] of fetchSessions) {
+      sessions.push({ eventId: eid, eventName: s.eventName, type: 'v2', status: s.status, teams: s.teams.length, startedAt: new Date(s.startedAt).toISOString() });
     }
     const autoStopInfo = allGamesFinalSince
       ? { allFinalSince: new Date(allGamesFinalSince).toISOString(), minutesUntilStop: Math.max(0, AUTO_STOP_DELAY - Math.round((Date.now() - allGamesFinalSince) / 60000)) }
       : null;
-    json({ status: 'ok', scraper: scraperStatus, event: currentEvent, sessions, activeSessions: activeSessions.size, maxSessions: MAX_SESSIONS, uptime: process.uptime(), autoStop: autoStopInfo });
+    json({ status: 'ok', scraper: scraperStatus, event: currentEvent, sessions, v1Sessions: activeSessions.size, v2Sessions: fetchSessions.size, maxV1: MAX_SESSIONS, maxV2: MAX_FETCH_SESSIONS, uptime: process.uptime(), autoStop: autoStopInfo });
 
   } else if (path === '/status') {
     const sessions = [];
     for (const [eid, s] of activeSessions) {
       sessions.push({
-        eventId: eid, eventName: s.eventName, status: s.status,
+        eventId: eid, eventName: s.eventName, type: 'v1', status: s.status,
         teams: s.teams.length,
+        autoStop: s.allGamesFinalSince ? { since: new Date(s.allGamesFinalSince).toISOString(), minutesRemaining: Math.max(0, AUTO_STOP_DELAY - Math.round((Date.now() - s.allGamesFinalSince) / 60000)) } : null,
+        logLines: s.log.slice(-30),
+      });
+    }
+    for (const [eid, s] of fetchSessions) {
+      sessions.push({
+        eventId: eid, eventName: s.eventName, type: 'v2', status: s.status,
+        teams: s.teams.length, pollInterval: FETCH_POLL_INTERVAL + 'min',
+        totalGames: s.totalGames, newGames: s.newGames,
+        lastCycleAt: s.lastCycleAt ? new Date(s.lastCycleAt).toISOString() : null,
         autoStop: s.allGamesFinalSince ? { since: new Date(s.allGamesFinalSince).toISOString(), minutesRemaining: Math.max(0, AUTO_STOP_DELAY - Math.round((Date.now() - s.allGamesFinalSince) / 60000)) } : null,
         logLines: s.log.slice(-30),
       });
@@ -330,6 +442,55 @@ const server = http.createServer(async (req, res) => {
     json({ status: 'starting', teamsLoaded: teams.length, event: eventName, activeSessions: activeSessions.size + 1 });
     startSession(eventId, teams, eventName).catch(err => log('❌ Session error: ' + err.message));
 
+  } else if (path === '/scrape-event-v2' && req.method === 'POST') {
+    if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
+
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let params;
+    try { params = JSON.parse(body); } catch(e) { json({ error: 'Invalid JSON' }, 400); return; }
+
+    const eventId = params.eventId;
+    if (!eventId) { json({ error: 'eventId required' }, 400); return; }
+
+    // Reject if already scraping this event (check both v1 and v2)
+    if (fetchSessions.has(eventId)) {
+      json({ error: 'Event already being scraped (v2)', eventId }, 409); return;
+    }
+    if (activeSessions.has(eventId)) {
+      json({ error: 'Event already being scraped (v1)', eventId }, 409); return;
+    }
+    if (fetchSessions.size >= MAX_FETCH_SESSIONS) {
+      json({ error: 'Max ' + MAX_FETCH_SESSIONS + ' concurrent v2 sessions reached' }, 429); return;
+    }
+
+    const { data: event } = await supabase.from('ec_events').select('*').eq('id', eventId).single();
+    if (!event) { json({ error: 'Event not found' }, 404); return; }
+
+    const { data: eventTeams } = await supabase
+      .from('ec_event_teams')
+      .select('*, team:ec_teams!team_id(*)')
+      .eq('event_id', eventId);
+
+    const teamsWithGC = (eventTeams || []).filter(et => et.team && (et.team.gc_team_id || et.team.gc_team_link));
+    if (teamsWithGC.length === 0) {
+      json({ error: 'No teams with GC links found for this event' }, 400); return;
+    }
+
+    const eventName = event.name || event.event_name || 'Unknown Event';
+    const startDate = event.start_date || '';
+    const endDate = event.end_date || '';
+
+    const teams = teamsWithGC.map(et => {
+      const team = et.team;
+      const url = team.gc_team_link || ('https://web.gc.com/teams/' + team.gc_team_id);
+      const age = et.age_group || team.age_group || 'Unknown';
+      return { url, ageGroup: age, eventName, startDate, endDate };
+    });
+
+    json({ status: 'starting', type: 'v2', teamsLoaded: teams.length, event: eventName, fetchSessions: fetchSessions.size + 1 });
+    startFetchSession(eventId, teams, eventName).catch(err => log('❌ v2 session error: ' + err.message));
+
   // ─── TEMPORARY: GC API discovery (remove after use) ────────
   } else if (path === '/discover-gc-api' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
@@ -387,22 +548,32 @@ const server = http.createServer(async (req, res) => {
     try { params = JSON.parse(body); } catch(e) {}
 
     if (params.eventId) {
-      await stopSession(params.eventId);
-      json({ status: 'stopped', eventId: params.eventId });
+      // Stop from whichever Map has it
+      if (fetchSessions.has(params.eventId)) {
+        await stopFetchSession(params.eventId);
+        json({ status: 'stopped', type: 'v2', eventId: params.eventId });
+      } else if (activeSessions.has(params.eventId)) {
+        await stopSession(params.eventId);
+        json({ status: 'stopped', type: 'v1', eventId: params.eventId });
+      } else {
+        json({ error: 'No active session for event ' + params.eventId }, 404);
+      }
     } else {
-      // Stop all sessions + legacy
-      const count = activeSessions.size;
+      // Stop all sessions (v1 + v2) + legacy
+      const v1Count = activeSessions.size;
+      const v2Count = fetchSessions.size;
       for (const [eid] of activeSessions) await stopSession(eid);
+      for (const [eid] of fetchSessions) await stopFetchSession(eid);
       await stopScraping();
-      json({ status: 'all_stopped', sessionsStopped: count });
+      json({ status: 'all_stopped', v1Stopped: v1Count, v2Stopped: v2Count });
     }
 
   } else {
-    json({ error: 'Not found', endpoints: ['/health', '/status', '/events', 'POST /scrape', 'POST /scrape-event', 'POST /stop'] }, 404);
+    json({ error: 'Not found', endpoints: ['/health', '/status', '/events', 'POST /scrape', 'POST /scrape-event', 'POST /scrape-event-v2', 'POST /stop'] }, 404);
   }
 });
 
 server.listen(PORT, () => {
   log('EC Scraper Service running on port ' + PORT);
-  log('Endpoints: /health, /status, /events, POST /scrape (auth), POST /scrape-event (auth), POST /stop (auth)');
+  log('Endpoints: /health, /status, /events, POST /scrape (auth), POST /scrape-event (auth), POST /scrape-event-v2 (auth), POST /stop (auth)');
 });
