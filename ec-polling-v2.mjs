@@ -22,7 +22,9 @@
 
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
+import fs, { cpSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
 
 try { const d = await import('dotenv'); d.default.config(); } catch(e) { /* dotenv not needed on Render */ }
 
@@ -112,6 +114,48 @@ async function closeBrowser() {
     browser = null;
     page = null;
   }
+}
+
+// ─── SESSION BROWSER (multi-event) ──────────────────────────
+
+async function createSessionBrowser(sessionId) {
+  const profileDir = path.join(tmpdir(), 'ec-scraper-' + sessionId);
+  if (existsSync(profileDir)) rmSync(profileDir, { recursive: true });
+  mkdirSync(profileDir, { recursive: true });
+  const baseProfile = './gc-browser-data';
+  if (existsSync(baseProfile)) {
+    cpSync(baseProfile, profileDir, { recursive: true });
+  }
+  const br = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--window-size=1920,1080'],
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    userDataDir: profileDir,
+  });
+  const pg = await br.newPage();
+  await pg.setViewport({ width: 1920, height: 1080 });
+  return { browser: br, page: pg, profileDir };
+}
+
+async function closeSessionBrowser(sessionBrowser) {
+  if (sessionBrowser?.browser) {
+    try { await sessionBrowser.browser.close(); } catch(e) {}
+  }
+  if (sessionBrowser?.profileDir) {
+    try { rmSync(sessionBrowser.profileDir, { recursive: true }); } catch(e) {}
+  }
+}
+
+async function checkLoginWithPage(pg) {
+  console.log('🔑 Checking saved session (session browser)...');
+  await pg.goto('https://web.gc.com', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await sleep(2000);
+  const loggedIn = await pg.evaluate(() => {
+    const signInBtn = document.querySelector('[data-testid="desktop-sign-in-button"]');
+    return !signInBtn || signInBtn.offsetParent === null;
+  });
+  if (!loggedIn) throw new Error('Session expired — run gc-save-session.mjs to log in again');
+  console.log('✅ Session valid (session browser)');
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
@@ -216,27 +260,28 @@ function parsePitching(tableText) {
 
 // ─── DISCOVER GAMES FROM TEAM SCHEDULE ───────────────────────
 
-async function discoverGames(teamUrl, startDate, endDate) {
+async function discoverGames(teamUrl, startDate, endDate, pg) {
+  const p = pg || page;
   try {
     // Navigate to team page
-    await page.goto(teamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await p.goto(teamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(3000);
-    
+
     // Click the SCHEDULE tab
-    const scheduleLink = await page.$('a[href*="/schedule"]');
+    const scheduleLink = await p.$('a[href*="/schedule"]');
     if (scheduleLink) {
       await scheduleLink.click();
       await sleep(3000);
     }
-    
+
     // Scroll down to load all games (GC may lazy-load)
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await sleep(2000);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await sleep(1000);
-    
+
     // Find all game links — they are <a class="ScheduleListByMonth__event">
-    const games = await page.evaluate(() => {
+    const games = await p.evaluate(() => {
       const links = [];
       
       // Primary selector: GC schedule game links
@@ -294,12 +339,13 @@ async function discoverGames(teamUrl, startDate, endDate) {
 
 // ─── SCRAPE A SINGLE GAME ────────────────────────────────────
 
-async function scrapeGame(url) {
+async function scrapeGame(url, pg) {
+  const p = pg || page;
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await p.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await sleep(6000);
 
-    const rawData = await page.evaluate(() => {
+    const rawData = await p.evaluate(() => {
       const away = document.querySelector('[data-testid="away-team-name"]')?.innerText?.trim() || '';
       const home = document.querySelector('[data-testid="home-team-name"]')?.innerText?.trim() || '';
       const tables = [...document.querySelectorAll('[data-testid="data-table"]')].map(t => t.innerText);
@@ -690,7 +736,8 @@ let allGamesFinalSince = null; // timestamp when we first detected all games fin
 
 // ─── MAIN POLLING LOOP ──────────────────────────────────────
 
-async function pollOnce(teams) {
+async function pollOnce(teams, ctx) {
+  const sessionPage = ctx?.page || null;
   console.log(`\n${'='.repeat(60)}`);
   console.log(`🔄 SCRAPE CYCLE — ${new Date().toLocaleTimeString()}`);
   console.log(`   ${teams.length} teams to check`);
@@ -703,9 +750,9 @@ async function pollOnce(teams) {
   for (const team of teams) {
     console.log(`\n📋 ${team.ageGroup} | ${team.eventName}`);
     console.log(`   ${team.url}`);
-    
+
     // Discover games from schedule
-    const games = await discoverGames(team.url, team.startDate, team.endDate);
+    const games = await discoverGames(team.url, team.startDate, team.endDate, sessionPage);
     console.log(`   📅 Found ${games.length} total games on schedule`);
     
     for (const game of games) {
@@ -729,7 +776,7 @@ async function pollOnce(teams) {
       
       console.log(`\n  📊 Scraping: ${game.text.substring(0, 80)}...`);
       
-      const data = await scrapeGame(game.url);
+      const data = await scrapeGame(game.url, sessionPage);
       if (!data || data.tables.length < 4) {
         console.log(`  ⏭️  Skipping — no box score data yet`);
         liveOrUpcoming++; // No data = game hasn't happened or is in progress
@@ -775,20 +822,25 @@ async function pollOnce(teams) {
   }
 
   // ─── AUTO-STOP CHECK ───────────────────────────────────────
-  if (totalGames > 0 && liveOrUpcoming === 0) {
-    if (!allGamesFinalSince) {
-      allGamesFinalSince = Date.now();
-      console.log(`\n🏁 All ${totalGames} games are FINAL. Auto-stop timer started (${AUTO_STOP_DELAY} min).`);
+  // When ctx is provided (multi-event session), delegate auto-stop tracking to caller
+  if (!ctx) {
+    // Standalone / legacy mode — use module-global allGamesFinalSince
+    if (totalGames > 0 && liveOrUpcoming === 0) {
+      if (!allGamesFinalSince) {
+        allGamesFinalSince = Date.now();
+        console.log(`\n🏁 All ${totalGames} games are FINAL. Auto-stop timer started (${AUTO_STOP_DELAY} min).`);
+      } else {
+        const minutesSinceFinal = Math.round((Date.now() - allGamesFinalSince) / 60000);
+        console.log(`\n🏁 All games still final. ${minutesSinceFinal}/${AUTO_STOP_DELAY} min until auto-stop.`);
+      }
     } else {
-      const minutesSinceFinal = Math.round((Date.now() - allGamesFinalSince) / 60000);
-      console.log(`\n🏁 All games still final. ${minutesSinceFinal}/${AUTO_STOP_DELAY} min until auto-stop.`);
+      if (allGamesFinalSince) {
+        console.log(`\n🔄 Games still in progress — auto-stop timer reset.`);
+      }
+      allGamesFinalSince = null;
     }
-  } else {
-    if (allGamesFinalSince) {
-      console.log(`\n🔄 Games still in progress — auto-stop timer reset.`);
-    }
-    allGamesFinalSince = null; // Reset if any game is still live/upcoming
   }
+  // Multi-event sessions handle auto-stop in runSessionCycle
 
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`✅ Cycle complete: ${totalGames} games found, ${newGames} scraped, ${liveOrUpcoming} still live/upcoming`);
@@ -798,7 +850,9 @@ async function pollOnce(teams) {
 }
 
 // ─── EXPORTED FOR SERVICE WRAPPER ────────────────────────────
-export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig, allGamesFinalSince, AUTO_STOP_DELAY };
+export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
+         createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
+         allGamesFinalSince, AUTO_STOP_DELAY };
 
 // ─── STANDALONE MODE (run directly) ──────────────────────────
 const isMainModule = process.argv[1] && (
