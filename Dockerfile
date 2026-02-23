@@ -25,7 +25,7 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 COPY package-scraper.json ./package.json
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 COPY ec-polling-v2.mjs ./
 COPY ec-scraper-service.mjs ./
 COPY ec-teams.txt ./
