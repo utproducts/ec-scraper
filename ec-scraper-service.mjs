@@ -1,7 +1,8 @@
 import http from 'http';
 import { createClient } from '@supabase/supabase-js';
 import { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
-         createSessionBrowser, closeSessionBrowser, checkLoginWithPage } from './ec-polling-v2.mjs';
+         createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
+         discoverGcApiEndpoints } from './ec-polling-v2.mjs';
 
 // Prevent Chrome crashes from killing the service
 process.on('uncaughtException', (err) => {
@@ -328,6 +329,46 @@ const server = http.createServer(async (req, res) => {
 
     json({ status: 'starting', teamsLoaded: teams.length, event: eventName, activeSessions: activeSessions.size + 1 });
     startSession(eventId, teams, eventName).catch(err => log('❌ Session error: ' + err.message));
+
+  // ─── TEMPORARY: GC API discovery (remove after use) ────────
+  } else if (path === '/discover-gc-api' && req.method === 'POST') {
+    if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
+
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let params;
+    try { params = JSON.parse(body); } catch(e) { json({ error: 'Invalid JSON' }, 400); return; }
+
+    const teamUrl = params.teamUrl;
+    if (!teamUrl || !teamUrl.includes('gc.com/teams/')) {
+      json({ error: 'teamUrl required (e.g. https://web.gc.com/teams/XXXXX)' }, 400); return;
+    }
+
+    log('🔍 Starting GC API discovery for: ' + teamUrl);
+
+    try {
+      // Launch browser if not already running
+      await launchBrowser();
+      await checkLogin();
+
+      const result = await discoverGcApiEndpoints(teamUrl);
+      json({
+        status: 'complete',
+        totalEndpoints: result.discovered.length,
+        uniquePatterns: result.patterns.length,
+        patterns: result.patterns,
+        logFile: result.logFile,
+        endpoints: result.discovered.map(d => ({
+          url: d.url,
+          status: d.status,
+          size: d.bodySize,
+          preview: d.bodyPreview.substring(0, 150),
+        })),
+      });
+    } catch(e) {
+      log('❌ Discovery error: ' + e.message);
+      json({ error: e.message }, 500);
+    }
 
   } else if (path === '/stop' && req.method === 'POST') {
     if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }

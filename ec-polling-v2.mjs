@@ -258,6 +258,143 @@ function parsePitching(tableText) {
   return pitchers;
 }
 
+// ─── TEMPORARY: API ENDPOINT DISCOVERY ──────────────────────
+// Run once to find GC's internal JSON APIs, then remove.
+
+async function discoverGcApiEndpoints(teamUrl, pg) {
+  const p = pg || page;
+  const discovered = [];
+  const logLines = [];
+
+  const addLine = (line) => { console.log(line); logLines.push(line); };
+
+  // Attach response listener
+  const responseHandler = async (response) => {
+    const url = response.url();
+    const ct = response.headers()['content-type'] || '';
+    if (!ct.includes('json')) return;
+
+    let bodyPreview = '';
+    let bodySize = 0;
+    try {
+      const buf = await response.buffer();
+      bodySize = buf.length;
+      bodyPreview = buf.toString('utf-8').substring(0, 200);
+    } catch(e) {
+      bodyPreview = '(could not read body: ' + e.message + ')';
+    }
+
+    const entry = {
+      url,
+      status: response.status(),
+      contentType: ct,
+      bodySize,
+      bodyPreview,
+    };
+    discovered.push(entry);
+    addLine(`  [JSON] ${response.status()} | ${bodySize} bytes | ${url}`);
+    addLine(`         ${bodyPreview}`);
+    addLine('');
+  };
+
+  p.on('response', responseHandler);
+
+  try {
+    // ── Phase 1: Team schedule page ──
+    addLine('='.repeat(70));
+    addLine('PHASE 1: TEAM SCHEDULE PAGE');
+    addLine('URL: ' + teamUrl);
+    addLine('='.repeat(70));
+
+    await p.goto(teamUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(4000);
+
+    // Click schedule tab
+    const scheduleLink = await p.$('a[href*="/schedule"]');
+    if (scheduleLink) {
+      addLine('\n--- Clicking SCHEDULE tab ---\n');
+      await scheduleLink.click();
+      await sleep(4000);
+    }
+
+    // Scroll to trigger lazy loads
+    await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await sleep(2000);
+    await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await sleep(2000);
+
+    const phase1Count = discovered.length;
+    addLine(`\n--- Phase 1 complete: ${phase1Count} JSON responses captured ---\n`);
+
+    // ── Phase 2: Find one box score page and navigate to it ──
+    const gameLinks = await p.evaluate(() => {
+      const links = [];
+      const els = document.querySelectorAll('a[class*="ScheduleListByMonth__event"]');
+      for (const el of els) {
+        const href = el.href || el.getAttribute('href') || '';
+        if (href) {
+          let fullUrl = href.startsWith('http') ? href : window.location.origin + href;
+          if (!fullUrl.includes('/box-score')) fullUrl = fullUrl.replace(/\/?$/, '/box-score');
+          links.push(fullUrl);
+        }
+      }
+      return links;
+    });
+
+    if (gameLinks.length > 0) {
+      const boxScoreUrl = gameLinks[0];
+      addLine('='.repeat(70));
+      addLine('PHASE 2: BOX SCORE PAGE');
+      addLine('URL: ' + boxScoreUrl);
+      addLine('='.repeat(70));
+
+      await p.goto(boxScoreUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await sleep(7000); // box score pages take longer to render
+
+      // Scroll to trigger any lazy-loaded stats
+      await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await sleep(2000);
+
+      const phase2Count = discovered.length - phase1Count;
+      addLine(`\n--- Phase 2 complete: ${phase2Count} JSON responses captured ---\n`);
+    } else {
+      addLine('\n--- No game links found on schedule, skipping Phase 2 ---\n');
+    }
+
+    // ── Summary ──
+    addLine('='.repeat(70));
+    addLine('SUMMARY: ' + discovered.length + ' total JSON endpoints discovered');
+    addLine('='.repeat(70));
+
+    // Dedupe by URL pattern (strip query params for grouping)
+    const byPattern = {};
+    for (const d of discovered) {
+      const base = d.url.split('?')[0];
+      if (!byPattern[base]) byPattern[base] = [];
+      byPattern[base].push(d);
+    }
+
+    addLine('\nUnique URL patterns (' + Object.keys(byPattern).length + '):\n');
+    for (const [pattern, entries] of Object.entries(byPattern)) {
+      addLine(`  ${pattern}`);
+      addLine(`    Hit ${entries.length}x | Status: ${entries[0].status} | Size: ${entries[0].bodySize} bytes`);
+      addLine(`    Preview: ${entries[0].bodyPreview.substring(0, 120)}`);
+      addLine('');
+    }
+
+    // Write to log file
+    const logContent = logLines.join('\n') + '\n\n' +
+      'RAW ENTRIES:\n' + JSON.stringify(discovered, null, 2);
+
+    fs.writeFileSync('gc-api-discovery.log', logContent);
+    addLine('\n📝 Written to gc-api-discovery.log');
+
+    return { discovered, patterns: Object.keys(byPattern), logFile: 'gc-api-discovery.log' };
+  } finally {
+    p.removeListener('response', responseHandler);
+  }
+}
+
 // ─── DISCOVER GAMES FROM TEAM SCHEDULE ───────────────────────
 
 async function discoverGames(teamUrl, startDate, endDate, pg) {
@@ -852,6 +989,7 @@ async function pollOnce(teams, ctx) {
 // ─── EXPORTED FOR SERVICE WRAPPER ────────────────────────────
 export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
          createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
+         discoverGcApiEndpoints,
          allGamesFinalSince, AUTO_STOP_DELAY };
 
 // ─── STANDALONE MODE (run directly) ──────────────────────────
