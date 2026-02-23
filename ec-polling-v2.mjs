@@ -305,6 +305,21 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
 
   p.on('response', responseHandler);
 
+  // Capture outgoing request headers for boxscore calls
+  const capturedRequests = [];
+  const requestHandler = (request) => {
+    const url = request.url();
+    if (url.includes('boxscore') || url.includes('game-stream-processing')) {
+      const headers = request.headers();
+      const entry = { url, method: request.method(), headers };
+      capturedRequests.push(entry);
+      addLine(`  [REQUEST] ${request.method()} ${url}`);
+      addLine(`  [HEADERS] ${JSON.stringify(headers, null, 2)}`);
+      addLine('');
+    }
+  };
+  p.on('request', requestHandler);
+
   // ── Phase 1: Navigate directly to schedule URL ──
   try {
     const scheduleUrl = teamUrl.replace(/\/?$/, '') + '/schedule';
@@ -391,10 +406,22 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
 
   // ── Summary ──
   p.off('response', responseHandler);
+  p.off('request', requestHandler);
 
   addLine('='.repeat(70));
   addLine('SUMMARY: ' + discovered.length + ' total JSON endpoints discovered');
+  addLine('CAPTURED REQUESTS: ' + capturedRequests.length + ' game-stream/boxscore requests');
   addLine('='.repeat(70));
+
+  if (capturedRequests.length > 0) {
+    addLine('\n--- CAPTURED REQUEST HEADERS ---\n');
+    for (const req of capturedRequests) {
+      addLine(`  ${req.method} ${req.url}`);
+      addLine(`  Authorization: ${req.headers['authorization'] || '(none)'}`);
+      addLine(`  All headers: ${JSON.stringify(req.headers, null, 2)}`);
+      addLine('');
+    }
+  }
 
   // Dedupe by URL pattern (strip query params for grouping)
   const byPattern = {};
@@ -414,12 +441,13 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
 
   // Write to log file
   const logContent = logLines.join('\n') + '\n\n' +
-    'RAW ENTRIES:\n' + JSON.stringify(discovered, null, 2);
+    'RAW ENTRIES:\n' + JSON.stringify(discovered, null, 2) + '\n\n' +
+    'CAPTURED REQUESTS:\n' + JSON.stringify(capturedRequests, null, 2);
 
   try { fs.writeFileSync('gc-api-discovery.log', logContent); } catch(e) { addLine('⚠️ Could not write log file: ' + e.message); }
   addLine('\n📝 Written to gc-api-discovery.log');
 
-  return { discovered, patterns: Object.keys(byPattern), logFile: 'gc-api-discovery.log' };
+  return { discovered, capturedRequests, patterns: Object.keys(byPattern), logFile: 'gc-api-discovery.log' };
 }
 
 // ─── DISCOVER GAMES FROM TEAM SCHEDULE ───────────────────────

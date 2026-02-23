@@ -359,6 +359,12 @@ const server = http.createServer(async (req, res) => {
         uniquePatterns: result.patterns.length,
         patterns: result.patterns,
         logFile: result.logFile,
+        capturedRequests: (result.capturedRequests || []).map(r => ({
+          url: r.url,
+          method: r.method,
+          authorization: r.headers?.['authorization'] || null,
+          headers: r.headers,
+        })),
         endpoints: result.discovered.map(d => ({
           url: d.url,
           status: d.status,
