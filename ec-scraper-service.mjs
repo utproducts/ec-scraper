@@ -346,12 +346,13 @@ const server = http.createServer(async (req, res) => {
 
     log('🔍 Starting GC API discovery for: ' + teamUrl);
 
+    let sessionBrowser = null;
     try {
-      // Launch browser if not already running
-      await launchBrowser();
-      await checkLogin();
+      // Use a separate session browser to avoid profile lock conflicts
+      sessionBrowser = await createSessionBrowser('api-discovery');
+      await checkLoginWithPage(sessionBrowser.page);
 
-      const result = await discoverGcApiEndpoints(teamUrl);
+      const result = await discoverGcApiEndpoints(teamUrl, sessionBrowser.page);
       json({
         status: 'complete',
         totalEndpoints: result.discovered.length,
@@ -368,6 +369,8 @@ const server = http.createServer(async (req, res) => {
     } catch(e) {
       log('❌ Discovery error: ' + e.message);
       json({ error: e.message }, 500);
+    } finally {
+      if (sessionBrowser) await closeSessionBrowser(sessionBrowser);
     }
 
   } else if (path === '/stop' && req.method === 'POST') {
