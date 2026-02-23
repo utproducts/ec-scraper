@@ -1,0 +1,77 @@
+2026/02/15-23:08:06.275 aa71fd Reusing MANIFEST /Users/ChadMary/Desktop/unrivaled-connect/backend/gc-browser-data/Default/Local Storage/leveldb/MANIFEST-000001
+2026/02/15-23:08:06.278 aa71fd Recovering log #244
+2026/02/15-23:08:06.278 aa71fd Level-0 table #247: started
+2026/02/15-23:08:06.284 aa71fd Level-0 table #247: 80060 bytes OK
+2026/02/15-23:08:06.286 aa71fd Delete type=0 #244
+2026/02/15-23:08:06.287 aa7202 Compacting 4@0 + 1@1 files
+2026/02/15-23:08:06.290 aa7202 Generated table #249@0: 47 keys, 84700 bytes
+2026/02/15-23:08:06.290 aa7202 Compacted 4@0 + 1@1 files => 84700 bytes
+2026/02/15-23:08:06.292 aa7202 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/15-23:08:06.292 aa7202 Delete type=2 #239
+2026/02/15-23:08:06.292 aa7202 Delete type=2 #237
+2026/02/15-23:08:06.292 aa7202 Delete type=2 #242
+2026/02/15-23:08:06.292 aa7202 Delete type=2 #247
+2026/02/15-23:08:06.292 aa7202 Delete type=2 #245
+2026/02/15-23:09:06.327 aa7202 Level-0 table #251: started
+2026/02/15-23:09:06.332 aa7202 Level-0 table #251: 79997 bytes OK
+2026/02/15-23:09:06.333 aa7202 Delete type=0 #248
+2026/02/15-23:13:19.997 aa7202 Level-0 table #253: started
+2026/02/15-23:13:20.001 aa7202 Level-0 table #253: 80218 bytes OK
+2026/02/15-23:13:20.003 aa7202 Delete type=0 #250
+2026/02/15-23:15:57.093 aa7202 Level-0 table #255: started
+2026/02/15-23:15:57.097 aa7202 Level-0 table #255: 80488 bytes OK
+2026/02/15-23:15:57.099 aa7202 Delete type=0 #252
+2026/02/15-23:18:34.412 aa7202 Level-0 table #257: started
+2026/02/15-23:18:34.415 aa7202 Level-0 table #257: 80922 bytes OK
+2026/02/15-23:18:34.418 aa7202 Delete type=0 #254
+2026/02/15-23:18:34.419 aa7202 Compacting 4@0 + 1@1 files
+2026/02/15-23:18:34.423 aa7202 Generated table #258@0: 47 keys, 85243 bytes
+2026/02/15-23:18:34.423 aa7202 Compacted 4@0 + 1@1 files => 85243 bytes
+2026/02/15-23:18:34.424 aa7202 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/15-23:18:34.424 aa7202 Delete type=2 #249
+2026/02/15-23:18:34.424 aa7202 Delete type=2 #255
+2026/02/15-23:18:34.424 aa7202 Delete type=2 #257
+2026/02/15-23:18:34.424 aa7202 Delete type=2 #253
+2026/02/15-23:18:34.424 aa7202 Delete type=2 #251
+2026/02/15-23:21:12.491 aa7202 Level-0 table #260: started
+2026/02/15-23:21:12.496 aa7202 Level-0 table #260: 83515 bytes OK
+2026/02/15-23:21:12.499 aa7202 Delete type=0 #256
+2026/02/15-23:23:50.034 aa7202 Level-0 table #262: started
+2026/02/15-23:23:50.037 aa7202 Level-0 table #262: 81181 bytes OK
+2026/02/15-23:23:50.041 aa7202 Delete type=0 #259
+2026/02/15-23:26:27.577 aa7202 Level-0 table #264: started
+2026/02/15-23:26:27.580 aa7202 Level-0 table #264: 81183 bytes OK
+2026/02/15-23:26:27.581 aa7202 Delete type=0 #261
+2026/02/15-23:29:05.120 aa7202 Level-0 table #266: started
+2026/02/15-23:29:05.124 aa7202 Level-0 table #266: 81184 bytes OK
+2026/02/15-23:29:05.127 aa7202 Delete type=0 #263
+2026/02/15-23:29:05.127 aa7202 Compacting 4@0 + 1@1 files
+2026/02/15-23:29:05.132 aa7202 Generated table #267@0: 47 keys, 85514 bytes
+2026/02/15-23:29:05.132 aa7202 Compacted 4@0 + 1@1 files => 85514 bytes
+2026/02/15-23:29:05.133 aa7202 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/15-23:29:05.133 aa7202 Delete type=2 #260
+2026/02/15-23:29:05.133 aa7202 Delete type=2 #262
+2026/02/15-23:29:05.133 aa7202 Delete type=2 #266
+2026/02/15-23:29:05.133 aa7202 Delete type=2 #258
+2026/02/15-23:29:05.133 aa7202 Delete type=2 #264
+2026/02/15-23:31:42.922 aa7202 Level-0 table #269: started
+2026/02/15-23:31:42.925 aa7202 Level-0 table #269: 81528 bytes OK
+2026/02/15-23:31:42.926 aa7202 Delete type=0 #265
+2026/02/15-23:34:20.876 aa7202 Level-0 table #271: started
+2026/02/15-23:34:20.881 aa7202 Level-0 table #271: 81690 bytes OK
+2026/02/15-23:34:20.884 aa7202 Delete type=0 #268
+2026/02/15-23:36:58.844 aa7202 Level-0 table #273: started
+2026/02/15-23:36:58.849 aa7202 Level-0 table #273: 81750 bytes OK
+2026/02/15-23:36:58.851 aa7202 Delete type=0 #270
+2026/02/16-00:01:31.419 aa7202 Level-0 table #275: started
+2026/02/16-00:01:31.422 aa7202 Level-0 table #275: 82203 bytes OK
+2026/02/16-00:01:31.427 aa7202 Delete type=0 #272
+2026/02/16-00:01:31.428 aa7202 Compacting 4@0 + 1@1 files
+2026/02/16-00:01:31.432 aa7202 Generated table #276@0: 47 keys, 86531 bytes
+2026/02/16-00:01:31.432 aa7202 Compacted 4@0 + 1@1 files => 86531 bytes
+2026/02/16-00:01:31.433 aa7202 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/02/16-00:01:31.433 aa7202 Delete type=2 #275
+2026/02/16-00:01:31.433 aa7202 Delete type=2 #273
+2026/02/16-00:01:31.433 aa7202 Delete type=2 #267
+2026/02/16-00:01:31.433 aa7202 Delete type=2 #271
+2026/02/16-00:01:31.433 aa7202 Delete type=2 #269

@@ -1,7 +1,10 @@
 node_modules/
 .env
 *.png
-gc-browser-data/
-gc-browser-data/
-gc-browser-data/
-gc-browser-data/
+gc-browser-data/*
+!gc-browser-data/Default/
+gc-browser-data/Default/*
+!gc-browser-data/Default/Cookies
+!gc-browser-data/Default/Local Storage/
+gc-browser-data/Default/Local Storage/*
+!gc-browser-data/Default/Local Storage/leveldb/
