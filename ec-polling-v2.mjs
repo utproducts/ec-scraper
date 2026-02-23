@@ -390,7 +390,7 @@ async function discoverGcApiEndpoints(teamUrl, pg) {
   }
 
   // ── Summary ──
-  p.removeListener('response', responseHandler);
+  p.off('response', responseHandler);
 
   addLine('='.repeat(70));
   addLine('SUMMARY: ' + discovered.length + ' total JSON endpoints discovered');
