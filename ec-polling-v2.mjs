@@ -591,20 +591,26 @@ async function scrapeGame(url, pg) {
 // ─── SAVE TO SUPABASE ────────────────────────────────────────
 
 async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
+  // Case-insensitive lookup by team name only (ignore age_group)
   const { data: existing } = await supabase
     .from('ec_teams')
     .select('id')
-    .eq('team_name', teamName)
+    .ilike('team_name', teamName)
+    .limit(1)
     .single();
 
   if (existing) return existing.id;
 
+  // Extract real age group from team name if present (e.g. "Florida Burn 9U" → "9U")
+  const ageMatch = teamName.match(/\b(\d{1,2}U)\b/i);
+  const realAgeGroup = ageMatch ? ageMatch[1].toUpperCase() : (ageGroup || null);
+
   const { data: newTeam, error } = await supabase
     .from('ec_teams')
-    .insert({ 
-      team_name: teamName, 
+    .insert({
+      team_name: teamName,
       gc_team_id: gcTeamId || null,
-      age_group: ageGroup || null,
+      age_group: realAgeGroup,
     })
     .select('id')
     .single();
