@@ -356,6 +356,22 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
   const boxScoreTeamIds = Object.keys(boxScore);
   const opponentTeamId = boxScoreTeamIds.find(id => id !== ourTeamId) || null;
 
+  // Fetch opponent's actual age group from GC API (not from the game/event)
+  let opponentAgeGroup = null;
+  if (opponentTeamId) {
+    try {
+      const oppInfo = await fetchTeamInfo(opponentTeamId);
+      // GC API returns age_group or age_division in team info
+      const rawAge = oppInfo.age_group || oppInfo.age_division || oppInfo.age || '';
+      // Extract "9U", "10U", etc. from whatever format they return
+      const ageMatch = rawAge.match(/(\d{1,2}U)/i);
+      opponentAgeGroup = ageMatch ? ageMatch[1].toUpperCase() : (rawAge || null);
+      await sleep(REQUEST_DELAY);
+    } catch (e) {
+      log('  ⚠️  Could not fetch opponent team info: ' + e.message);
+    }
+  }
+
   // Normalize names
   ourTeamName = normalizeTeamName(ourTeamName);
   const normalizedOpponent = normalizeTeamName(opponentName);
@@ -365,6 +381,9 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
   const homeTeamName = isHome ? ourTeamName : normalizedOpponent;
   const awayGcId = isHome ? opponentTeamId : ourTeamId;
   const homeGcId = isHome ? ourTeamId : opponentTeamId;
+  // Use caller's ageGroup for our team (from ec_event_teams), opponent's from GC API
+  const awayAgeGroup = isHome ? opponentAgeGroup : ageGroup;
+  const homeAgeGroup = isHome ? ageGroup : opponentAgeGroup;
 
   // Scores
   const ourScore = game.score?.team ?? null;
@@ -388,9 +407,9 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
 
   log('  📝 ' + awayTeamName + ' ' + (awayScore ?? '?') + ' @ ' + homeTeamName + ' ' + (homeScore ?? '?') + ' [' + status + ']');
 
-  // Find/create teams in DB
-  const awayTeamDbId = await findOrCreateTeam(awayTeamName, awayGcId, ageGroup, eventName);
-  const homeTeamDbId = await findOrCreateTeam(homeTeamName, homeGcId, ageGroup, eventName);
+  // Find/create teams in DB — each team gets its own age group source
+  const awayTeamDbId = await findOrCreateTeam(awayTeamName, awayGcId, awayAgeGroup, eventName);
+  const homeTeamDbId = await findOrCreateTeam(homeTeamName, homeGcId, homeAgeGroup, eventName);
   if (!awayTeamDbId || !homeTeamDbId) {
     log('  ❌ Could not create teams');
     return null;
