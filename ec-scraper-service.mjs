@@ -568,12 +568,83 @@ const server = http.createServer(async (req, res) => {
       json({ status: 'all_stopped', v1Stopped: v1Count, v2Stopped: v2Count });
     }
 
+  } else if (path === '/cleanup-dates' && req.method === 'POST') {
+    if (!checkAuth(req)) { json({ error: 'Unauthorized' }, 401); return; }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    let params = {};
+    try { params = JSON.parse(body); } catch(e) {}
+
+    const eventId = params.eventId;
+    if (!eventId) { json({ error: 'eventId required' }, 400); return; }
+
+    try {
+      // Get event dates
+      const { data: event } = await supabase.from('ec_events').select('id, name, event_name, start_date, end_date').eq('id', eventId).single();
+      if (!event || !event.start_date || !event.end_date) {
+        json({ error: 'Event not found or missing start_date/end_date' }, 400);
+        return;
+      }
+
+      const bufferMs = 24 * 60 * 60 * 1000; // 1 day buffer
+      const startMs = new Date(event.start_date).getTime() - bufferMs;
+      const endMs = new Date(event.end_date).getTime() + bufferMs;
+      const startStr = new Date(startMs).toISOString().split('T')[0];
+      const endStr = new Date(endMs).toISOString().split('T')[0];
+
+      const eventName = event.name || event.event_name;
+
+      // Find games outside the date range for this event
+      const { data: outOfRange } = await supabase
+        .from('ec_games')
+        .select('id, gc_game_id, game_date, home_team_id, away_team_id, status')
+        .eq('event_name', eventName)
+        .or(`game_date.lt.${startStr},game_date.gt.${endStr}`);
+
+      if (!outOfRange || outOfRange.length === 0) {
+        json({ status: 'clean', message: 'No out-of-range games found', event: eventName, dateRange: `${event.start_date} to ${event.end_date}` });
+        return;
+      }
+
+      if (params.dryRun !== false) {
+        // Dry run — just show what would be deleted
+        json({
+          status: 'dry_run',
+          event: eventName,
+          dateRange: `${event.start_date} to ${event.end_date}`,
+          bufferRange: `${startStr} to ${endStr}`,
+          gamesOutOfRange: outOfRange.length,
+          games: outOfRange.map(g => ({ id: g.id, gc_game_id: g.gc_game_id, game_date: g.game_date, status: g.status })),
+          message: 'Pass dryRun: false to actually delete these games',
+        });
+        return;
+      }
+
+      // Actually delete: stats first, then games
+      const gameIds = outOfRange.map(g => g.id);
+      await supabase.from('ec_game_stats').delete().in('game_id', gameIds);
+      await supabase.from('ec_player_of_game').delete().in('game_id', gameIds);
+      const { error } = await supabase.from('ec_games').delete().in('id', gameIds);
+
+      if (error) { json({ error: 'Delete failed: ' + error.message }, 500); return; }
+
+      json({
+        status: 'cleaned',
+        event: eventName,
+        dateRange: `${event.start_date} to ${event.end_date}`,
+        gamesDeleted: gameIds.length,
+        deletedIds: gameIds,
+      });
+    } catch (err) {
+      json({ error: err.message }, 500);
+    }
+
   } else {
-    json({ error: 'Not found', endpoints: ['/health', '/status', '/events', 'POST /scrape', 'POST /scrape-event', 'POST /scrape-event-v2', 'POST /stop'] }, 404);
+    json({ error: 'Not found', endpoints: ['/health', '/status', '/events', 'POST /scrape', 'POST /scrape-event', 'POST /scrape-event-v2', 'POST /stop', 'POST /cleanup-dates'] }, 404);
   }
 });
 
 server.listen(PORT, () => {
   log('EC Scraper Service running on port ' + PORT);
-  log('Endpoints: /health, /status, /events, POST /scrape (auth), POST /scrape-event (auth), POST /scrape-event-v2 (auth), POST /stop (auth)');
+  log('Endpoints: /health, /status, /events, POST /scrape (auth), POST /scrape-event (auth), POST /scrape-event-v2 (auth), POST /stop (auth), POST /cleanup-dates (auth)');
 });

@@ -330,9 +330,11 @@ function extractPlayerStats(group, playerMap, type) {
  * @param {string} ageGroup - Age group (e.g. "9U")
  * @param {string} eventName - Event name
  * @param {string} eventId - Event UUID (for registered team lookup)
+ * @param {string} eventStartDate - Event start date (YYYY-MM-DD)
+ * @param {string} eventEndDate - Event end date (YYYY-MM-DD)
  * @param {function} logFn - Logging function
  */
-async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, eventName, eventId, logFn) {
+async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, eventName, eventId, eventStartDate, eventEndDate, logFn) {
   const log = logFn || console.log;
 
   // Determine team names and home/away
@@ -404,6 +406,18 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
   if (game.start_ts) {
     const parsed = new Date(game.start_ts);
     if (!isNaN(parsed)) gameDate = parsed.toISOString().split('T')[0];
+  }
+
+  // Date validation: game must fall within event dates (with 1-day buffer)
+  if (eventStartDate && eventEndDate) {
+    const bufferMs = 24 * 60 * 60 * 1000; // 1 day
+    const gameMs = new Date(gameDate).getTime();
+    const startMs = new Date(eventStartDate).getTime() - bufferMs;
+    const endMs = new Date(eventEndDate).getTime() + bufferMs;
+    if (gameMs < startMs || gameMs > endMs) {
+      log('  ⏭️ Skipping out-of-range game: ' + gameDate + ' not within ' + eventStartDate + ' to ' + eventEndDate + ' (+/-1 day buffer)');
+      return null;
+    }
   }
 
   log('  📝 ' + awayTeamName + ' ' + (awayScore ?? '?') + ' @ ' + homeTeamName + ' ' + (homeScore ?? '?') + ' [' + status + ']');
@@ -638,7 +652,7 @@ async function pollTeams(teams, logFn) {
           const boxScore = await fetchBoxScore(gcGameId);
           await sleep(REQUEST_DELAY);
 
-          await saveGameFromApi(gcGameId, teamId, game, boxScore, team.ageGroup, team.eventName, team.eventId, log);
+          await saveGameFromApi(gcGameId, teamId, game, boxScore, team.ageGroup, team.eventName, team.eventId, team.startDate, team.endDate, log);
           newGames++;
           await sleep(REQUEST_DELAY);
         } catch (err) {
