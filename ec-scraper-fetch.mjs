@@ -329,9 +329,10 @@ function extractPlayerStats(group, playerMap, type) {
  * @param {object} boxScore - Full boxscore JSON (keyed by team IDs)
  * @param {string} ageGroup - Age group (e.g. "9U")
  * @param {string} eventName - Event name
+ * @param {string} eventId - Event UUID (for registered team lookup)
  * @param {function} logFn - Logging function
  */
-async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, eventName, logFn) {
+async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, eventName, eventId, logFn) {
   const log = logFn || console.log;
 
   // Determine team names and home/away
@@ -417,9 +418,31 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
     ((p.first_name || '') + ' ' + (p.last_name || '')).trim()
   ).filter(Boolean);
 
+  // Check if opponent is already registered for this event (by gc_team_id match)
+  let opponentRegisteredDbId = null;
+  if (eventId && opponentTeamId) {
+    const { data: regTeams } = await supabase
+      .from('ec_event_teams')
+      .select('team_id, team:ec_teams!team_id(id, team_name, gc_team_id)')
+      .eq('event_id', eventId);
+
+    if (regTeams) {
+      const match = regTeams.find(rt => rt.team?.gc_team_id === opponentTeamId);
+      if (match) {
+        opponentRegisteredDbId = match.team.id;
+        log('  ✅ Opponent "' + opponentName + '" matched to registered team "' + match.team.team_name + '"');
+      }
+    }
+  }
+
   // Find/create teams in DB — each team gets its own age group source + roster
-  const awayTeamDbId = await findOrCreateTeam(awayTeamName, awayGcId, awayAgeGroup, eventName, awayPlayers);
-  const homeTeamDbId = await findOrCreateTeam(homeTeamName, homeGcId, homeAgeGroup, eventName, homePlayers);
+  // Use registered team ID for opponent if found, skip findOrCreateTeam
+  const awayTeamDbId = isHome && opponentRegisteredDbId
+    ? opponentRegisteredDbId
+    : await findOrCreateTeam(awayTeamName, awayGcId, awayAgeGroup, eventName, awayPlayers);
+  const homeTeamDbId = !isHome && opponentRegisteredDbId
+    ? opponentRegisteredDbId
+    : await findOrCreateTeam(homeTeamName, homeGcId, homeAgeGroup, eventName, homePlayers);
   if (!awayTeamDbId || !homeTeamDbId) {
     log('  ❌ Could not create teams');
     return null;
@@ -513,7 +536,7 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
 /**
  * Poll all teams for games and save to DB.
  *
- * @param {Array} teams - [{ url, ageGroup, eventName, startDate, endDate }]
+ * @param {Array} teams - [{ url, ageGroup, eventName, eventId, startDate, endDate }]
  * @param {function} logFn - Logging function
  * @returns {{ totalGames, newGames, liveOrUpcoming }}
  */
@@ -586,7 +609,7 @@ async function pollTeams(teams, logFn) {
           const boxScore = await fetchBoxScore(gcGameId);
           await sleep(REQUEST_DELAY);
 
-          await saveGameFromApi(gcGameId, teamId, game, boxScore, team.ageGroup, team.eventName, log);
+          await saveGameFromApi(gcGameId, teamId, game, boxScore, team.ageGroup, team.eventName, team.eventId, log);
           newGames++;
           await sleep(REQUEST_DELAY);
         } catch (err) {

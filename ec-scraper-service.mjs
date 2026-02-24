@@ -485,7 +485,7 @@ const server = http.createServer(async (req, res) => {
       const team = et.team;
       const url = team.gc_team_link || ('https://web.gc.com/teams/' + team.gc_team_id);
       const age = et.age_group || team.age_group || 'Unknown';
-      return { url, ageGroup: age, eventName, startDate, endDate };
+      return { url, ageGroup: age, eventName, eventId, startDate, endDate };
     });
 
     json({ status: 'starting', type: 'v2', teamsLoaded: teams.length, event: eventName, fetchSessions: fetchSessions.size + 1 });
