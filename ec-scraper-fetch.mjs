@@ -418,20 +418,49 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
     ((p.first_name || '') + ' ' + (p.last_name || '')).trim()
   ).filter(Boolean);
 
-  // Check if opponent is already registered for this event (by gc_team_id match)
+  // Check if opponent is registered for this event — skip non-event games
   let opponentRegisteredDbId = null;
-  if (eventId && opponentTeamId) {
+  let opponentInEvent = false;
+  if (eventId) {
     const { data: regTeams } = await supabase
       .from('ec_event_teams')
       .select('team_id, team:ec_teams!team_id(id, team_name, gc_team_id)')
       .eq('event_id', eventId);
 
     if (regTeams) {
-      const match = regTeams.find(rt => rt.team?.gc_team_id === opponentTeamId);
-      if (match) {
-        opponentRegisteredDbId = match.team.id;
-        log('  ✅ Opponent "' + opponentName + '" matched to registered team "' + match.team.team_name + '"');
+      // 1. Match by gc_team_id
+      if (opponentTeamId) {
+        const gcMatch = regTeams.find(rt => rt.team?.gc_team_id === opponentTeamId);
+        if (gcMatch) {
+          opponentRegisteredDbId = gcMatch.team.id;
+          opponentInEvent = true;
+          log('  ✅ Opponent "' + opponentName + '" matched to registered team "' + gcMatch.team.team_name + '" (GC ID)');
+        }
       }
+
+      // 2. Fuzzy name match against registered teams
+      if (!opponentInEvent) {
+        const oppLower = normalizedOpponent.toLowerCase().replace(/\b\d{1,2}u\b/gi, '').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+        for (const rt of regTeams) {
+          if (!rt.team?.team_name) continue;
+          const regLower = rt.team.team_name.toLowerCase().replace(/\b\d{1,2}u\b/gi, '').replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+          // Exact core match, or one contains the other (with reasonable length ratio)
+          if (regLower === oppLower ||
+              (oppLower.length >= 4 && regLower.includes(oppLower)) ||
+              (regLower.length >= 4 && oppLower.includes(regLower) && Math.min(oppLower.length, regLower.length) / Math.max(oppLower.length, regLower.length) > 0.5)) {
+            opponentRegisteredDbId = rt.team.id;
+            opponentInEvent = true;
+            log('  ✅ Opponent "' + opponentName + '" matched to registered team "' + rt.team.team_name + '" (name)');
+            break;
+          }
+        }
+      }
+    }
+
+    // Skip game if opponent is not in the event
+    if (!opponentInEvent) {
+      log('  ⏭️ Skipping non-event game: ' + ourTeamName + ' vs ' + normalizedOpponent + ' (opponent not in event)');
+      return null;
     }
   }
 

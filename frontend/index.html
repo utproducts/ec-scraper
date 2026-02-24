@@ -281,9 +281,8 @@
       });
       bar.innerHTML = html;
       // Default to first age group
-      if (ageGroups.length > 0 && currentAge === 'all') {
+      if (ageGroups.length > 0 && !currentAge) {
         currentAge = ageGroups[0].age_group;
-        loadAll();
       }
     }
 
