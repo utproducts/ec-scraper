@@ -71,7 +71,35 @@ function normalizeTeamName(name) {
 }
 
 
-// ─── TEAM NAME NORMALIZATION ─────────────────────────────────
+// ─── FUZZY TEAM MATCHING ─────────────────────────────────────
+const STATE_ABBREVS = {
+  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',
+  CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',
+  HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',
+  KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',
+  MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',
+  NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',
+  NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',
+  OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
+  SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',
+  VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',
+};
+
+function fuzzyCoreName(name) {
+  if (!name) return '';
+  let s = name;
+  // Remove age group (9U, 10U, 11U, etc.)
+  s = s.replace(/\b\d{1,2}U\b/gi, '');
+  // Remove emojis and special characters (keep letters, numbers, spaces)
+  s = s.replace(/[^\w\s]/g, '');
+  // Expand state abbreviations at word boundaries
+  for (const [abbr, full] of Object.entries(STATE_ABBREVS)) {
+    const re = new RegExp(`\\b${abbr}\\b`, 'gi');
+    s = s.replace(re, full);
+  }
+  // Collapse whitespace, trim, lowercase
+  return s.replace(/\s+/g, ' ').trim().toLowerCase();
+}
 
 // ─── BROWSER ─────────────────────────────────────────────────
 let browser = null;
@@ -618,7 +646,54 @@ async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
     return byName.id;
   }
 
-  // 3. Create new team — extract age group from name (e.g. "Florida Burn 9U" → "9U")
+  // 3. Fuzzy name matching — expand abbreviations, strip age group/emojis, compare core names
+  const coreName = fuzzyCoreName(teamName);
+  if (coreName.length >= 3) {
+    // Pick the longest word as the search keyword
+    const words = coreName.split(' ').filter(w => w.length >= 3);
+    const keyword = words.sort((a, b) => b.length - a.length)[0];
+    if (keyword) {
+      const { data: candidates } = await supabase
+        .from('ec_teams')
+        .select('id, team_name, gc_team_id')
+        .ilike('team_name', `%${keyword}%`)
+        .limit(50);
+
+      if (candidates && candidates.length > 0) {
+        let bestMatch = null;
+        let bestScore = 0;
+
+        for (const cand of candidates) {
+          const candCore = fuzzyCoreName(cand.team_name);
+          if (!candCore) continue;
+          // Exact core match
+          if (candCore === coreName) { bestMatch = cand; bestScore = 1; break; }
+          // One contains the other
+          if (candCore.includes(coreName) || coreName.includes(candCore)) {
+            const score = Math.min(candCore.length, coreName.length) / Math.max(candCore.length, coreName.length);
+            if (score > bestScore) { bestScore = score; bestMatch = cand; }
+          }
+          // Word overlap score
+          const coreWords = new Set(coreName.split(' '));
+          const candWords = new Set(candCore.split(' '));
+          const overlap = [...coreWords].filter(w => candWords.has(w)).length;
+          const unionSize = new Set([...coreWords, ...candWords]).size;
+          const jaccard = overlap / unionSize;
+          if (jaccard > bestScore) { bestScore = jaccard; bestMatch = cand; }
+        }
+
+        if (bestMatch && bestScore >= 0.6) {
+          console.log(`  🔗 Fuzzy match: "${teamName}" → "${bestMatch.team_name}" (score: ${bestScore.toFixed(2)})`);
+          if (gcTeamId && !bestMatch.gc_team_id) {
+            await supabase.from('ec_teams').update({ gc_team_id: gcTeamId }).eq('id', bestMatch.id);
+          }
+          return bestMatch.id;
+        }
+      }
+    }
+  }
+
+  // 4. Create new team — extract age group from name (e.g. "Florida Burn 9U" → "9U")
   const ageMatch = teamName.match(/\b(\d{1,2}U)\b/i);
   const realAgeGroup = ageMatch ? ageMatch[1].toUpperCase() : (ageGroup || null);
 
@@ -636,6 +711,7 @@ async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
     console.error(`  ⚠️  Team create error: ${error.message}`);
     return null;
   }
+  console.log(`  🆕 Created new team: "${teamName}" (age: ${realAgeGroup})`);
   return newTeam.id;
 }
 
