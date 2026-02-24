@@ -616,9 +616,118 @@ async function scrapeGame(url, pg) {
   }
 }
 
+// ─── ROSTER-BASED TEAM MATCHING ──────────────────────────────
+
+/**
+ * Find a team by checking if 3+ players from the given roster
+ * already exist on any team in the database.
+ *
+ * @param {string[]} playerNames - Array of "First Last" names from boxscore
+ * @param {string|null} ageGroup - Optional age group filter (e.g. "9U")
+ * @returns {{ teamId: string, teamName: string, matchCount: number } | null}
+ */
+async function findTeamByRoster(playerNames, ageGroup) {
+  if (!playerNames || playerNames.length < 3) return null;
+
+  // Normalize names for comparison: lowercase, trim
+  const normalized = playerNames
+    .map(n => (n || '').trim().toLowerCase())
+    .filter(n => n.length >= 3);
+  if (normalized.length < 3) return null;
+
+  // Try exact case match first (fast path)
+  const { data: exactMatches } = await supabase
+    .from('ec_players')
+    .select('id, player_name, team_id')
+    .in('player_name', playerNames);
+
+  if (exactMatches && exactMatches.length >= 3) {
+    const result = await scoreRosterMatches(exactMatches, ageGroup);
+    if (result) return result;
+  }
+
+  // Fall back: search by last names to find potential matches, then filter client-side
+  // Extract last names (most distinctive part) for a targeted search
+  const lastNames = [...new Set(playerNames
+    .map(n => (n || '').trim().split(/\s+/).pop())
+    .filter(n => n && n.length >= 2)
+  )];
+
+  if (lastNames.length < 3) return null;
+
+  // Query players matching any last name (batch in groups to avoid huge IN clauses)
+  const batchSize = 30;
+  let allCandidates = [];
+  for (let i = 0; i < lastNames.length; i += batchSize) {
+    const batch = lastNames.slice(i, i + batchSize);
+    // Use or() with ilike for case-insensitive last-name search
+    const filters = batch.map(ln => `player_name.ilike.%${ln}`).join(',');
+    const { data: batchResults } = await supabase
+      .from('ec_players')
+      .select('id, player_name, team_id')
+      .or(filters);
+    if (batchResults) allCandidates = allCandidates.concat(batchResults);
+  }
+
+  if (allCandidates.length === 0) return null;
+
+  // Dedupe and case-insensitive full-name match
+  const seen = new Set();
+  const matches = allCandidates.filter(p => {
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return normalized.includes((p.player_name || '').trim().toLowerCase());
+  });
+
+  if (matches.length < 3) return null;
+  return scoreRosterMatches(matches, ageGroup);
+}
+
+async function scoreRosterMatches(matches, ageGroup) {
+  // Group by team_id, count matches per team
+  const teamCounts = {};
+  for (const p of matches) {
+    if (!p.team_id) continue;
+    if (!teamCounts[p.team_id]) teamCounts[p.team_id] = 0;
+    teamCounts[p.team_id]++;
+  }
+
+  // Find team with most matches (minimum 3)
+  let bestTeamId = null;
+  let bestCount = 0;
+  for (const [tid, count] of Object.entries(teamCounts)) {
+    if (count > bestCount) {
+      bestCount = count;
+      bestTeamId = tid;
+    }
+  }
+
+  if (bestCount < 3) return null;
+
+  // Optional age group filter — fetch team and verify
+  const { data: team } = await supabase
+    .from('ec_teams')
+    .select('id, team_name, age_group')
+    .eq('id', bestTeamId)
+    .single();
+
+  if (!team) return null;
+
+  // If ageGroup filter provided, check it doesn't clash wildly
+  if (ageGroup && team.age_group) {
+    const reqAge = parseInt(ageGroup);
+    const teamAge = parseInt(team.age_group);
+    if (reqAge && teamAge && Math.abs(reqAge - teamAge) > 2) {
+      return null; // Too far apart (e.g., 9U vs 14U)
+    }
+  }
+
+  return { teamId: team.id, teamName: team.team_name, matchCount: bestCount };
+}
+
 // ─── SAVE TO SUPABASE ────────────────────────────────────────
 
-async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
+async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName, playerNames) {
   // 1. Search by gc_team_id first (most reliable — same team across name variations)
   if (gcTeamId) {
     const { data: byGcId } = await supabase
@@ -646,7 +755,19 @@ async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
     return byName.id;
   }
 
-  // 3. Fuzzy name matching — expand abbreviations, strip age group/emojis, compare core names
+  // 3. Roster-based matching — find team with 3+ shared players
+  if (playerNames && playerNames.length >= 3) {
+    const rosterMatch = await findTeamByRoster(playerNames, ageGroup);
+    if (rosterMatch) {
+      console.log(`  🔗 ROSTER MATCH: "${teamName}" matched to "${rosterMatch.teamName}" via ${rosterMatch.matchCount} shared players`);
+      if (gcTeamId && !(await supabase.from('ec_teams').select('gc_team_id').eq('id', rosterMatch.teamId).single()).data?.gc_team_id) {
+        await supabase.from('ec_teams').update({ gc_team_id: gcTeamId }).eq('id', rosterMatch.teamId);
+      }
+      return rosterMatch.teamId;
+    }
+  }
+
+  // 4. Fuzzy name matching — expand abbreviations, strip age group/emojis, compare core names
   const coreName = fuzzyCoreName(teamName);
   if (coreName.length >= 3) {
     // Pick the longest word as the search keyword
@@ -693,7 +814,7 @@ async function findOrCreateTeam(teamName, gcTeamId, ageGroup, eventName) {
     }
   }
 
-  // 4. Create new team — extract age group from name (e.g. "Florida Burn 9U" → "9U")
+  // 5. Create new team — extract age group from name (e.g. "Florida Burn 9U" → "9U")
   const ageMatch = teamName.match(/\b(\d{1,2}U)\b/i);
   const realAgeGroup = ageMatch ? ageMatch[1].toUpperCase() : (ageGroup || null);
 
@@ -851,8 +972,10 @@ async function saveGame(url, data, ageGroup, eventName) {
     }
   }
 
-  const awayTeamId = await findOrCreateTeam(away, null, ageGroup, eventName);
-  const homeTeamId = await findOrCreateTeam(home, null, ageGroup, eventName);
+  const awayPlayerNames = awayBatting.map(p => p.name).filter(Boolean);
+  const homePlayerNames = homeBatting.map(p => p.name).filter(Boolean);
+  const awayTeamId = await findOrCreateTeam(away, null, ageGroup, eventName, awayPlayerNames);
+  const homeTeamId = await findOrCreateTeam(home, null, ageGroup, eventName, homePlayerNames);
   if (!awayTeamId || !homeTeamId) return null;
 
   // Upsert game
@@ -1144,7 +1267,7 @@ async function pollOnce(teams, ctx) {
 export { launchBrowser, checkLogin, closeBrowser, pollOnce, readTeamConfig,
          createSessionBrowser, closeSessionBrowser, checkLoginWithPage,
          discoverGcApiEndpoints,
-         findOrCreateTeam, findOrCreatePlayer, calculatePOTG, normalizeTeamName,
+         findOrCreateTeam, findOrCreatePlayer, findTeamByRoster, calculatePOTG, normalizeTeamName,
          allGamesFinalSince, AUTO_STOP_DELAY };
 
 // ─── STANDALONE MODE (run directly) ──────────────────────────

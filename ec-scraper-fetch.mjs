@@ -407,9 +407,19 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
 
   log('  📝 ' + awayTeamName + ' ' + (awayScore ?? '?') + ' @ ' + homeTeamName + ' ' + (homeScore ?? '?') + ' [' + status + ']');
 
-  // Find/create teams in DB — each team gets its own age group source
-  const awayTeamDbId = await findOrCreateTeam(awayTeamName, awayGcId, awayAgeGroup, eventName);
-  const homeTeamDbId = await findOrCreateTeam(homeTeamName, homeGcId, homeAgeGroup, eventName);
+  // Extract player names from boxscore for roster matching
+  const awayBsTeamId = isHome ? opponentTeamId : ourTeamId;
+  const homeBsTeamId = isHome ? ourTeamId : opponentTeamId;
+  const awayPlayers = (boxScore[awayBsTeamId]?.players || []).map(p =>
+    ((p.first_name || '') + ' ' + (p.last_name || '')).trim()
+  ).filter(Boolean);
+  const homePlayers = (boxScore[homeBsTeamId]?.players || []).map(p =>
+    ((p.first_name || '') + ' ' + (p.last_name || '')).trim()
+  ).filter(Boolean);
+
+  // Find/create teams in DB — each team gets its own age group source + roster
+  const awayTeamDbId = await findOrCreateTeam(awayTeamName, awayGcId, awayAgeGroup, eventName, awayPlayers);
+  const homeTeamDbId = await findOrCreateTeam(homeTeamName, homeGcId, homeAgeGroup, eventName, homePlayers);
   if (!awayTeamDbId || !homeTeamDbId) {
     log('  ❌ Could not create teams');
     return null;
