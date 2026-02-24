@@ -1722,7 +1722,30 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
     const ageGroups = [...new Set(ageMatches.map(a => a.toUpperCase()))]
       .sort((a, b) => parseInt(a) - parseInt(b));
 
-    res.json({ name, startDate, endDate, venue, address, ageGroups, entryFee });
+    // 3. Parse contact/director info from mailto and tel links
+    let directorName = '';
+    let directorEmail = '';
+    let directorPhone = '';
+
+    const emailEl = $('a[href^="mailto:"]').first();
+    if (emailEl.length) {
+      directorEmail = emailEl.attr('href').replace('mailto:', '');
+      // Name is typically in an h3 near the email link
+      const h3 = emailEl.prevAll('h3').first();
+      if (h3.length) {
+        directorName = h3.text().trim();
+      } else {
+        const parentH3 = emailEl.parent().find('h3').first();
+        if (parentH3.length) directorName = parentH3.text().trim();
+      }
+    }
+
+    const phoneEl = $('a[href^="tel:"]').first();
+    if (phoneEl.length) {
+      directorPhone = phoneEl.text().trim();
+    }
+
+    res.json({ name, startDate, endDate, venue, address, ageGroups, entryFee, directorName, directorEmail, directorPhone });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
