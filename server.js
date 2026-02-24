@@ -1322,30 +1322,46 @@ app.get('/api/ec/age-groups', async (req, res) => {
   }
 });
 
+// GET /api/ec/games — all games with team info
+// When filtering by age_group, uses team's registered age_group (ec_teams.age_group)
+// instead of ec_games.age_group. A game shows if EITHER team matches the filter,
+// so cross-division games appear under both age tabs.
 app.get('/api/ec/games', async (req, res) => {
   try {
+    const ageFilter = req.query.age_group || null;
+
+    // Fetch all games for this event (don't filter by game age_group)
     let query = supabase
       .from('ec_games')
-      .select('id, gc_game_id, home_score, away_score, age_group, status, game_date, field, innings_completed, home_team_id, away_team_id')
+      .select('id, gc_game_id, home_score, away_score, age_group, status, game_date, field, innings_completed, home_team_id, away_team_id, event_name')
       .order('game_date', { ascending: false });
 
     if (req.query.status) query = query.eq('status', req.query.status);
-    if (req.query.age_group) query = query.eq('age_group', req.query.age_group);
     if (req.query.event) query = query.eq('event_name', req.query.event);
 
     const { data: games, error } = await query;
     if (error) throw error;
 
-    // Get team names
-    const teamIds = [...new Set(games.flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
-    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds);
+    // Get team names and registered age_group
+    const teamIds = [...new Set((games||[]).flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
+    const { data: teams } = await supabase.from('ec_teams').select('id, team_name, age_group').in('id', teamIds.length ? teamIds : ['none']);
     const teamMap = {};
-    (teams || []).forEach(t => teamMap[t.id] = t.team_name);
+    (teams || []).forEach(t => { teamMap[t.id] = { name: t.team_name, age_group: t.age_group }; });
 
-    const result = games.map(g => ({
+    // Filter by team's registered age_group (show game if either team matches)
+    let filtered = games || [];
+    if (ageFilter) {
+      filtered = filtered.filter(g => {
+        const homeAge = teamMap[g.home_team_id]?.age_group;
+        const awayAge = teamMap[g.away_team_id]?.age_group;
+        return homeAge === ageFilter || awayAge === ageFilter;
+      });
+    }
+
+    const result = filtered.map(g => ({
       ...g,
-      home_team: teamMap[g.home_team_id] || 'TBD',
-      away_team: teamMap[g.away_team_id] || 'TBD',
+      home_team: teamMap[g.home_team_id]?.name || 'TBD',
+      away_team: teamMap[g.away_team_id]?.name || 'TBD',
     }));
 
     res.json({ games: result });
@@ -1401,6 +1417,8 @@ app.get('/api/ec/games/:id', async (req, res) => {
 });
 
 // GET /api/ec/leaderboards — batting & pitching leaders
+// Filters by team's registered age_group (ec_teams.age_group), not game age_group.
+// Only includes stats for players whose team belongs to the requested division.
 app.get('/api/ec/leaderboards', async (req, res) => {
   try {
     const ageGroup = req.query.age_group || null;
@@ -1408,26 +1426,28 @@ app.get('/api/ec/leaderboards', async (req, res) => {
     const minAB = parseInt(req.query.min_ab) || 5;
     const minIP = parseInt(req.query.min_ip) || 5;
 
-    // Get games for this age group/event
+    // Get all games for this event (don't filter by game age_group)
     let gamesQuery = supabase.from('ec_games').select('id');
-    if (ageGroup) gamesQuery = gamesQuery.eq('age_group', ageGroup);
     if (eventName) gamesQuery = gamesQuery.eq('event_name', eventName);
     const { data: games } = await gamesQuery;
     const gameIds = (games || []).map(g => g.id);
-    
+
     if (gameIds.length === 0) return res.json({ batting: [], pitching: [] });
 
-    // Get all stats for these games
+    // Get all stats for these games, including team age_group
     const { data: stats } = await supabase
       .from('ec_game_stats')
-      .select('*, player:ec_players!player_id(player_name, jersey_number), team:ec_teams!team_id(team_name)')
+      .select('*, player:ec_players!player_id(player_name, jersey_number), team:ec_teams!team_id(team_name, age_group)')
       .in('game_id', gameIds);
 
-    // Aggregate batting stats by player
+    // Aggregate batting stats by player — only include if team age matches filter
     const batters = {};
     const pitchers = {};
 
     for (const s of (stats || [])) {
+      // Skip players whose team doesn't match the requested age_group
+      if (ageGroup && s.team?.age_group !== ageGroup) continue;
+
       const pid = s.player_id;
       const name = s.player?.player_name || 'Unknown';
       const team = s.team?.team_name || 'Unknown';
@@ -1487,42 +1507,60 @@ app.get('/api/ec/leaderboards', async (req, res) => {
 });
 
 // GET /api/ec/standings — W-L records
+// Teams only appear in standings for their REGISTERED age_group (ec_teams.age_group),
+// not whatever age_group the game was tagged with. This prevents cross-division
+// opponents from leaking into the wrong standings.
 app.get('/api/ec/standings', async (req, res) => {
   try {
+    const ageFilter = req.query.age_group || null;
+
+    // Fetch ALL final games for this event (don't filter by game age_group)
     let query = supabase
       .from('ec_games')
       .select('home_score, away_score, home_team_id, away_team_id, age_group, event_name')
       .eq('status', 'final');
 
     if (req.query.event) query = query.eq('event_name', req.query.event);
-    if (req.query.age_group) query = query.eq('age_group', req.query.age_group);
 
     const { data: games } = await query;
 
+    // Build team map with age_group from ec_teams (the team's registration)
     const teamIds = [...new Set((games||[]).flatMap(g => [g.home_team_id, g.away_team_id]).filter(Boolean))];
-    const { data: teams } = await supabase.from('ec_teams').select('id, team_name').in('id', teamIds.length ? teamIds : ['none']);
+    const { data: teams } = await supabase.from('ec_teams').select('id, team_name, age_group').in('id', teamIds.length ? teamIds : ['none']);
     const teamMap = {};
-    (teams || []).forEach(t => teamMap[t.id] = t.team_name);
+    (teams || []).forEach(t => { teamMap[t.id] = { name: t.team_name, age_group: t.age_group }; });
 
     // Track standings by team NAME to merge duplicates
     const standings = {};
     for (const g of (games || [])) {
-      const homeName = teamMap[g.home_team_id] || 'Unknown';
-      const awayName = teamMap[g.away_team_id] || 'Unknown';
-      
+      const home = teamMap[g.home_team_id] || { name: 'Unknown', age_group: null };
+      const away = teamMap[g.away_team_id] || { name: 'Unknown', age_group: null };
+
       // Skip TBD placeholder teams
-      if (homeName.startsWith('TBD') || awayName.startsWith('TBD')) continue;
-      
-      if (!standings[homeName]) standings[homeName] = { team: homeName, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
-      if (!standings[awayName]) standings[awayName] = { team: awayName, age_group: g.age_group||'', w:0, l:0, rs:0, ra:0 };
+      if (home.name.startsWith('TBD') || away.name.startsWith('TBD')) continue;
 
-      standings[homeName].rs += g.home_score||0;
-      standings[homeName].ra += g.away_score||0;
-      standings[awayName].rs += g.away_score||0;
-      standings[awayName].ra += g.home_score||0;
+      // Only credit a team if their registered age_group matches the filter
+      const homeInDiv = !ageFilter || home.age_group === ageFilter;
+      const awayInDiv = !ageFilter || away.age_group === ageFilter;
 
-      if (g.home_score > g.away_score) { standings[homeName].w++; standings[awayName].l++; }
-      else if (g.away_score > g.home_score) { standings[awayName].w++; standings[homeName].l++; }
+      // Skip game entirely if neither team belongs to this division
+      if (ageFilter && !homeInDiv && !awayInDiv) continue;
+
+      if (homeInDiv) {
+        if (!standings[home.name]) standings[home.name] = { team: home.name, age_group: home.age_group||g.age_group||'', w:0, l:0, rs:0, ra:0 };
+        standings[home.name].rs += g.home_score||0;
+        standings[home.name].ra += g.away_score||0;
+        if (g.home_score > g.away_score) standings[home.name].w++;
+        else if (g.away_score > g.home_score) standings[home.name].l++;
+      }
+
+      if (awayInDiv) {
+        if (!standings[away.name]) standings[away.name] = { team: away.name, age_group: away.age_group||g.age_group||'', w:0, l:0, rs:0, ra:0 };
+        standings[away.name].rs += g.away_score||0;
+        standings[away.name].ra += g.home_score||0;
+        if (g.away_score > g.home_score) standings[away.name].w++;
+        else if (g.home_score > g.away_score) standings[away.name].l++;
+      }
     }
 
     const result = Object.values(standings)
@@ -1539,6 +1577,7 @@ app.get('/api/ec/standings', async (req, res) => {
 // GET /api/ec/potg — player of the game list
 
 // GET /api/ec/all-tournament — Top 15 performers by weighted score
+// Filters by team's registered age_group (ec_teams.age_group), not game age_group.
 app.get('/api/ec/all-tournament', async (req, res) => {
   try {
     const ageGroup = req.query.age_group || null;
@@ -1546,23 +1585,25 @@ app.get('/api/ec/all-tournament', async (req, res) => {
     const minAB = parseInt(req.query.min_ab) || 5;
     const minIP = parseInt(req.query.min_ip) || 5;
 
-    // Get games
+    // Get all games for this event (don't filter by game age_group)
     let gamesQuery = supabase.from('ec_games').select('id');
-    if (ageGroup) gamesQuery = gamesQuery.eq('age_group', ageGroup);
     if (eventName) gamesQuery = gamesQuery.eq('event_name', eventName);
     const { data: games } = await gamesQuery;
     const gameIds = (games || []).map(g => g.id);
-    
+
     if (gameIds.length === 0) return res.json({ team: [] });
 
     const { data: stats } = await supabase
       .from('ec_game_stats')
-      .select('*, player:ec_players!player_id(player_name, jersey_number), team:ec_teams!team_id(team_name)')
+      .select('*, player:ec_players!player_id(player_name, jersey_number), team:ec_teams!team_id(team_name, age_group)')
       .in('game_id', gameIds);
 
-    // Aggregate + score each player
+    // Aggregate + score each player — only include if team age matches filter
     const players = {};
     for (const s of (stats || [])) {
+      // Skip players whose team doesn't match the requested age_group
+      if (ageGroup && s.team?.age_group !== ageGroup) continue;
+
       const pid = s.player_id;
       if (!players[pid]) {
         players[pid] = {
