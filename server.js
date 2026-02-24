@@ -5,6 +5,7 @@ const cors = require('cors');
 const twilio = require('twilio');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1677,6 +1678,51 @@ app.get('/api/ec/all-tournament', async (req, res) => {
       eventName: eventName || 'All Events',
       minAB, minIP 
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/ec/fetch-event-info — Parse event details from a USSSA event URL
+app.post('/api/ec/fetch-event-info', async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url || !url.includes('usssa.com')) {
+      return res.status(400).json({ error: 'A valid USSSA event URL is required' });
+    }
+
+    // Fetch the page HTML server-side
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EventCentral/1.0)' },
+    });
+    if (!response.ok) throw new Error('Failed to fetch page: ' + response.status);
+    const html = await response.text();
+
+    const $ = cheerio.load(html);
+
+    // 1. Parse JSON-LD structured data
+    let jsonLd = {};
+    $('script[type="application/ld+json"]').each((_, el) => {
+      try {
+        const parsed = JSON.parse($(el).html());
+        if (parsed['@type'] === 'Event') jsonLd = parsed;
+      } catch (e) { /* skip malformed JSON-LD */ }
+    });
+
+    const name = jsonLd.name || '';
+    const startDate = jsonLd.startDate || '';
+    const endDate = jsonLd.endDate || '';
+    const venue = jsonLd.location?.name || '';
+    const address = jsonLd.location?.address?.streetAddress || '';
+    const entryFee = jsonLd.offers?.price ? '$' + parseFloat(jsonLd.offers.price).toFixed(0) : '';
+
+    // 2. Scan page text for age groups (e.g. 9U, 10U, 14U)
+    const pageText = $.text();
+    const ageMatches = pageText.match(/\b(\d{1,2}U)\b/gi) || [];
+    const ageGroups = [...new Set(ageMatches.map(a => a.toUpperCase()))]
+      .sort((a, b) => parseInt(a) - parseInt(b));
+
+    res.json({ name, startDate, endDate, venue, address, ageGroups, entryFee });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
