@@ -1279,9 +1279,17 @@ RESPONSE RULES:
 
     res.status(200).send('<Response></Response>');
 
+    // Fallback — ensure Twilio always gets a response
+    if (!res.headersSent) {
+      res.type('text/xml').status(200).send('<Response></Response>');
+    }
+
   } catch (error) {
     console.error('❌ FULL ERROR:', error.message);
     console.error('❌ ERROR STACK:', error.stack);
+    if (!res.headersSent) {
+      res.type('text/xml').status(200).send('<Response></Response>');
+    }
   }
 });
 
