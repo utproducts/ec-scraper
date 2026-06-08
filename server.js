@@ -1478,13 +1478,15 @@ app.get('/api/ec/leaderboards', async (req, res) => {
       }
 
       if (s.stat_type === 'pitching') {
-        if (!pitchers[pid]) pitchers[pid] = { name, team, jersey, ip: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, games: 0 };
+        if (!pitchers[pid]) pitchers[pid] = { name, team, jersey, ip: 0, h: 0, r: 0, er: 0, bb: 0, so: 0, wins: 0, saves: 0, games: 0 };
         pitchers[pid].ip += s.ip || 0;
         pitchers[pid].h += s.p_h || 0;
         pitchers[pid].r += s.p_r || 0;
         pitchers[pid].er += s.p_er || 0;
         pitchers[pid].bb += s.p_bb || 0;
         pitchers[pid].so += s.p_so || 0;
+        pitchers[pid].wins += s.wins || 0;
+        pitchers[pid].saves += s.saves || 0;
         pitchers[pid].games++;
       }
     }
@@ -1521,7 +1523,7 @@ app.get('/api/ec/leaderboards', async (req, res) => {
 
     const pitEntry = (p, value, extra = {}) => ({
       name: p.name, team: p.team, jersey: p.jersey, value, games: p.games,
-      era: p.era.toFixed(2), whip: p.whip.toFixed(2), so: p.so, ip: Math.round(p.ip * 10) / 10, ...extra,
+      era: p.era.toFixed(2), whip: p.whip.toFixed(2), so: p.so, w: p.wins, sv: p.saves, ip: Math.round(p.ip * 10) / 10, ...extra,
     });
 
     const battingLeadersByCat = {
@@ -1536,6 +1538,8 @@ app.get('/api/ec/leaderboards', async (req, res) => {
     };
     const pitchingLeadersByCat = {
       ERA:  [...qualifiedPit].sort((a, b) => a.era - b.era).slice(0, 15).map(p => pitEntry(p, p.era.toFixed(2))),
+      W:    [...pitchersArr].filter(p => p.wins > 0).sort((a, b) => b.wins - a.wins).slice(0, 15).map(p => pitEntry(p, p.wins)),
+      SV:   [...pitchersArr].filter(p => p.saves > 0).sort((a, b) => b.saves - a.saves).slice(0, 15).map(p => pitEntry(p, p.saves)),
       SO:   [...pitchersArr].filter(p => p.so > 0).sort((a, b) => b.so - a.so).slice(0, 15).map(p => pitEntry(p, p.so)),
       WHIP: [...qualifiedPit].sort((a, b) => a.whip - b.whip).slice(0, 15).map(p => pitEntry(p, p.whip.toFixed(2))),
     };

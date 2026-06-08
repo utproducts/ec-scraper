@@ -331,6 +331,8 @@ function extractPlayerStats(group, playerMap, type) {
         er: stats.ER ?? 0,
         bb: stats.BB ?? 0,
         so: stats.SO ?? stats.K ?? 0,
+        w: stats.W ?? 0,
+        sv: stats.SV ?? stats.S ?? 0,
       });
     }
   }
@@ -586,6 +588,7 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
       await supabase.from('ec_game_stats').insert({
         game_id: gameDbId, player_id: playerId, team_id: team.teamId,
         stat_type: 'pitching', ip: p.ip, p_h: p.h, p_r: p.r, p_er: p.er, p_bb: p.bb, p_so: p.so,
+        wins: p.w ?? 0, saves: p.sv ?? 0,
       });
     }
   }

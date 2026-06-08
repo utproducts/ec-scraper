@@ -164,10 +164,12 @@
     ];
     const PIT_CATS = [
       ['ERA','Earned Run Avg','min 5 IP'],
+      ['W','Wins',''],
+      ['SV','Saves',''],
       ['SO','Strikeouts',''],
       ['WHIP','WHIP','min 5 IP'],
     ];
-    const PENDING = new Set(['HR','SB']);
+    const PENDING = new Set(['HR','SB','W','SV']);
 
     let byAge = {};
     let ages = [];
