@@ -69,6 +69,7 @@
     .row .who{min-width:0}
     .row .nm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .row .tm{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .row .st{display:inline-block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:10px;letter-spacing:.5px;color:var(--navy);background:#eef1f8;border:1px solid #dde2f0;border-radius:4px;padding:0 5px;margin-right:6px;vertical-align:1px}
     .row .val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;color:var(--navy)}
     .row.r1 .val{color:var(--red)}
     .empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:13px}
@@ -158,10 +159,12 @@
       SO:[42,39,37,35,33,31,29,27,25,23],
       WHIP:["0.62","0.71","0.80","0.88","0.97","1.05","1.13","1.22","1.30","1.38"],
     };
+    const _ST=["FL","GA","TX","CA","AL","NC","TN","SC","OH","AZ","LA","MO"];
     function _mockEntries(cat,off){
       return _V[cat].map((val,i)=>({
         name:_FN[(i+off)%_FN.length]+" "+_LN[(i*2+off)%_LN.length],
         team:_TEAMS[(i*3+off)%_TEAMS.length],
+        state:_ST[(i*4+off)%_ST.length],
         jersey:String(((i*7+off)%30)+1),
         value:String(val),
       }));
@@ -316,7 +319,7 @@
           body = list.map((p,i) => `
             <div class="row r${i+1}">
               <div class="rk">${i+1}</div>
-              <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc(p.team||'')}</div></div>
+              <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${p.state?`<span class="st">${esc(p.state)}</span>`:''}${esc(p.team||'')}</div></div>
               <div class="val">${esc(String(p.value))}</div>
             </div>`).join('');
         }
