@@ -309,9 +309,9 @@
         <div id="errorMsg" class="error-card"></div>
 
         <div class="input-group" id="gcInputGroup">
-          <label>GameChanger Team URL</label>
-          <input type="url" id="gcUrl" placeholder="https://web.gc.com/teams/..." autocomplete="off">
-          <div class="input-hint">Open GameChanger → Your Team → Share → Copy Link</div>
+          <label>GameChanger Team Link or Team ID</label>
+          <input type="text" id="gcUrl" placeholder="https://web.gc.com/teams/...  (or your Team ID)" autocomplete="off">
+          <div class="input-hint">Paste your team link (GameChanger → Your Team → Share → Copy Link), or your Team ID (⋮ menu → Team ID).</div>
         </div>
 
         <div class="no-gc-row" id="noGcRow" onclick="toggleNoGc()">
@@ -407,22 +407,32 @@
     }
 
     async function submitForm() {
-      const gcUrl = document.getElementById('gcUrl').value.trim();
+      const rawInput = document.getElementById('gcUrl').value.trim();
       const noGc = document.getElementById('noGcCheck').checked;
       const errorEl = document.getElementById('errorMsg');
-      
+
       errorEl.style.display = 'none';
 
-      if (!noGc && !gcUrl) {
-        errorEl.textContent = 'Please paste your GameChanger team link, or check the box if you don\'t use GameChanger.';
+      if (!noGc && !rawInput) {
+        errorEl.textContent = 'Please paste your GameChanger team link or Team ID, or check the box if you don\'t use GameChanger.';
         errorEl.style.display = 'block';
         return;
       }
 
-      if (!noGc && gcUrl && !gcUrl.includes('gc.com')) {
-        errorEl.textContent = 'That doesn\'t look like a GameChanger link. It should start with https://web.gc.com/teams/...';
-        errorEl.style.display = 'block';
-        return;
+      // Accept either a full GameChanger link or a bare Team ID, then normalize to a link
+      // so the backend's /teams/(id) extraction works the same either way.
+      let gcUrl = null;
+      if (!noGc && rawInput) {
+        const urlMatch = rawInput.match(/gc\.com\/teams\/([A-Za-z0-9]+)/);
+        if (urlMatch) {
+          gcUrl = 'https://web.gc.com/teams/' + urlMatch[1];
+        } else if (/^[A-Za-z0-9]{8,}$/.test(rawInput)) {
+          gcUrl = 'https://web.gc.com/teams/' + rawInput;
+        } else {
+          errorEl.textContent = 'That doesn\'t look right. Paste your full link (https://web.gc.com/teams/...) or just your Team ID.';
+          errorEl.style.display = 'block';
+          return;
+        }
       }
 
       const btn = document.getElementById('submitBtn');
