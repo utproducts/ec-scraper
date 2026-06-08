@@ -267,6 +267,22 @@ function extractPlayerStats(group, playerMap, type) {
     }
   }
 
+  // Extended stats: group.extra = [{ stat_name: "HR", stats: [{ player_id, value }] }]
+  // GameChanger reports HR, SB, 2B, 3B, TB, etc. here (and/or in the nested stats
+  // object above). Merge them in so HR/SB leaderboards have data. Existing keys win.
+  if (Array.isArray(group.extra)) {
+    for (const ex of group.extra) {
+      const statName = ex && ex.stat_name;
+      if (!statName || !Array.isArray(ex.stats)) continue;
+      for (const row of ex.stats) {
+        const pid = row && row.player_id;
+        if (!pid) continue;
+        if (!statsByPlayer[pid]) statsByPlayer[pid] = {};
+        if (statsByPlayer[pid][statName] === undefined) statsByPlayer[pid][statName] = row.value;
+      }
+    }
+  }
+
   // Log discovered structure
   const playerIds = Object.keys(statsByPlayer);
   if (playerIds.length > 0) {
@@ -294,6 +310,10 @@ function extractPlayerStats(group, playerMap, type) {
         rbi: stats.RBI ?? 0,
         bb: stats.BB ?? 0,
         so: stats.SO ?? stats.K ?? 0,
+        hr: stats.HR ?? 0,
+        sb: stats.SB ?? 0,
+        doubles: stats['2B'] ?? stats.DBL ?? 0,
+        triples: stats['3B'] ?? stats.TPL ?? 0,
       });
     } else if (type === 'pitching') {
       // Convert decimal IP to baseball notation (1.6667 → 1.2, 1.3333 → 1.1)
@@ -556,6 +576,7 @@ async function saveGameFromApi(gcGameId, ourTeamId, game, boxScore, ageGroup, ev
       await supabase.from('ec_game_stats').insert({
         game_id: gameDbId, player_id: playerId, team_id: team.teamId,
         stat_type: 'batting', ab: p.ab, r: p.r, h: p.h, rbi: p.rbi, bb: p.bb, so: p.so,
+        hr: p.hr ?? 0, sb: p.sb ?? 0, doubles: p.doubles ?? 0, triples: p.triples ?? 0,
         position_played: p.pos || null,
       });
     }

@@ -1,933 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>USSSA Event Central</title>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>USSSA Stats — National Youth Baseball Leaders</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #f4f5f7; color: #1a2332; font-family: 'Barlow', sans-serif; min-height: 100vh; }
-    ::-webkit-scrollbar { height: 4px; width: 4px; }
-    ::-webkit-scrollbar-track { background: #e5e7eb; }
-    ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+    :root{
+      --navy:#23346B;
+      --navy-dk:#1a2752;
+      --red:#CE2129;
+      --white:#ffffff;
+      --bg:#f4f6fb;
+      --card:#ffffff;
+      --line:#e6e9f2;
+      --text:#1d2330;
+      --muted:#7a8294;
+      --gold:#d4a017;
+      --radius:14px;
+      --shadow:0 1px 3px rgba(35,52,107,.08),0 8px 24px rgba(35,52,107,.06);
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    .cond{font-family:'Barlow Condensed','Inter',sans-serif;letter-spacing:.5px}
 
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+    header.topbar{background:var(--navy);color:#fff;position:sticky;top:0;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+    .topbar-inner{max-width:1200px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand img{height:38px;width:auto;display:block}
+    .brand .wm{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;line-height:1;letter-spacing:1px}
+    .brand .wm .stats{color:#ffffff;background:var(--red);padding:1px 8px;border-radius:5px;margin-left:6px}
+    .gc-badge{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:#c7cfe6;font-weight:500;white-space:nowrap}
+    .gc-badge b{color:#fff;font-weight:600}
+    .gc-dot{width:8px;height:8px;border-radius:50%;background:#57d977;box-shadow:0 0 0 3px rgba(87,217,119,.2)}
 
-    .fc { font-family: 'Barlow Condensed', sans-serif; }
+    .hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dk) 100%);color:#fff;padding:26px 20px 30px}
+    .hero-inner{max-width:1200px;margin:0 auto}
+    .hero h1{font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:700;letter-spacing:1px;line-height:1;text-transform:uppercase}
+    .hero p{color:#b9c2de;margin-top:7px;font-size:14px;font-weight:500}
 
-    /* Header — keep dark navy for branding */
-    .header { background: linear-gradient(135deg, #002147, #001a3a, #000d20); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 20px; position: sticky; top: 0; z-index: 100; }
-    .header-inner { max-width: 1200px; margin: 0 auto; }
-    .header-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-    .logo-area { display: flex; align-items: center; gap: 12px; }
-    .usssa-badge { background: linear-gradient(135deg, #cc0000, #990000); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 900; color: #fff; letter-spacing: 2px; text-transform: uppercase; }
-    .ec-title { font-size: 16px; font-weight: 800; color: #fff; text-transform: uppercase; letter-spacing: 1px; }
-    .live-badge { display: flex; align-items: center; font-size: 11px; color: #ef4444; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
-    .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; margin-right: 6px; animation: pulse 1.5s ease-in-out infinite; }
-    .clock { font-size: 11px; color: #94a3b8; }
-    .event-info { padding: 14px 0 10px; }
-    .event-name { font-size: 20px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: 0.5px; }
-    .event-meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+    .controls{max-width:1200px;margin:-16px auto 0;padding:0 20px;position:relative;z-index:10}
+    .controls-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:18px}
+    .ctrl-group{display:flex;align-items:center;gap:10px}
+    .ctrl-label{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+    select.age{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;letter-spacing:.5px;color:var(--navy);border:2px solid var(--line);border-radius:10px;padding:7px 36px 7px 14px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2323346B' d='M6 8 0 0h12z'/%3E%3C/svg%3E") no-repeat right 13px center;cursor:pointer;-webkit-appearance:none;appearance:none}
+    select.age:focus{outline:none;border-color:var(--navy)}
+    .class-btns{display:flex;gap:8px;flex-wrap:wrap}
+    .class-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.8px;padding:8px 18px;border-radius:999px;border:2px solid var(--line);background:#fff;color:var(--navy);cursor:pointer;transition:.15s}
+    .class-btn:hover:not(:disabled){border-color:var(--navy)}
+    .class-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+    .class-btn:disabled{opacity:.35;cursor:not-allowed}
+    .seg{margin-left:auto;display:flex;background:var(--bg);border-radius:999px;padding:4px}
+    .seg button{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.8px;border:none;background:transparent;color:var(--muted);padding:7px 22px;border-radius:999px;cursor:pointer;transition:.15s}
+    .seg button.active{background:var(--red);color:#fff}
 
-    /* Tabs — dark text on transparent, red underline active */
-    .tabs { display: flex; gap: 0; overflow-x: auto; }
-    .tab { background: none; border: none; cursor: pointer; padding: 10px 16px; color: rgba(255,255,255,0.5); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; border-bottom: 2px solid transparent; transition: all 0.2s; }
-    .tab.active { color: #fff; border-bottom-color: #cc0000; }
+    .qual-note{max-width:1200px;margin:10px auto 0;padding:0 22px;font-size:12px;color:var(--muted)}
 
-    /* Age Group Filter Bar — light gray inactive, red active */
-    .age-bar { display: flex; gap: 6px; padding: 12px 0 0; overflow-x: auto; }
-    .age-btn { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 20px; padding: 6px 16px; cursor: pointer; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; transition: all 0.2s; }
-    .age-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
-    .age-btn.active { background: linear-gradient(135deg, #cc0000, #990000); border-color: transparent; color: #fff; }
+    main{max-width:1200px;margin:0 auto;padding:18px 20px 60px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
+    .lcard{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+    .lcard h3{background:var(--navy);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;letter-spacing:.8px;padding:11px 16px;display:flex;justify-content:space-between;align-items:center;text-transform:uppercase}
+    .lcard h3 .sub{font-family:'Inter';font-size:10px;font-weight:600;color:#aeb8d8;letter-spacing:.5px}
+    .row{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:10px;padding:9px 16px;border-top:1px solid var(--line)}
+    .row:first-of-type{border-top:none}
+    .row .rk{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;color:var(--muted);text-align:center}
+    .row.r1 .rk{color:var(--gold)}.row.r2 .rk{color:#9aa3b2}.row.r3 .rk{color:#c08457}
+    .row .who{min-width:0}
+    .row .nm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .row .tm{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .row .val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:20px;color:var(--navy)}
+    .row.r1 .val{color:var(--red)}
+    .empty{padding:22px 16px;text-align:center;color:var(--muted);font-size:13px}
+    .empty.pending{color:#9a7b1f}
+    .state{padding:60px 20px;text-align:center;color:var(--muted)}
+    .state .big{font-family:'Barlow Condensed',sans-serif;font-size:24px;color:var(--navy);margin-bottom:6px;letter-spacing:.5px}
+    .spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--navy);border-radius:50%;animation:sp .7s linear infinite;margin:0 auto 14px}
+    @keyframes sp{to{transform:rotate(360deg)}}
 
-    /* Content */
-    .content { max-width: 1200px; margin: 0 auto; padding: 20px 20px 60px; }
+    footer{text-align:center;padding:26px 20px 40px;color:var(--muted);font-size:12px;letter-spacing:.5px}
+    footer b{color:var(--navy)}
+    .sec-hd{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;letter-spacing:1px;color:var(--navy);text-transform:uppercase;margin:6px 2px 2px}
 
-    /* Game cards — white with subtle shadow */
-    .games-list { display: flex; flex-direction: column; gap: 10px; }
-    .game-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; overflow: hidden; transition: box-shadow 0.3s; animation: fadeIn 0.3s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .game-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-    .game-card.live { background: #fff; border-color: rgba(239,68,68,0.3); box-shadow: 0 2px 8px rgba(239,68,68,0.08); }
-    .game-card .shimmer-bar { height: 2px; background: linear-gradient(90deg, #ef4444, #f59e0b, #ef4444); background-size: 200% 100%; animation: shimmer 2s linear infinite; }
-    .game-header { padding: 14px 16px; cursor: pointer; }
-    .game-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .game-meta { font-size: 10px; color: #0a1628; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-    .game-datetime { font-size: 11px; color: #6b7280; margin-bottom: 8px; }
-    .game-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; display: flex; align-items: center; gap: 4px; }
-    .game-status.live { color: #ef4444; }
-    .game-status.final { color: #6b7280; }
-    .game-status.upcoming { color: #d97706; }
-    .team-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .team-name { color: #1a2332; font-size: 14px; font-weight: 500; flex: 1; }
-    .team-score { font-size: 22px; font-weight: 800; min-width: 30px; text-align: right; }
-    .team-score.winning { color: #0a1628; }
-    .team-score.losing { color: #9ca3af; }
-    .expand-hint { font-size: 10px; color: #cc0000; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 8px; text-align: center; font-weight: 600; }
-    .expand-arrow { font-size: 10px; color: #9ca3af; transition: transform 0.3s; display: inline-block; }
-    .expand-arrow.open { transform: rotate(180deg); }
-
-    /* Box score dropdown */
-    .box-score-panel { border-top: 1px solid #e5e7eb; padding: 16px; background: #f8f9fa; animation: fadeIn 0.3s ease; display: none; }
-    .box-score-panel.open { display: block; }
-    .box-team-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; padding: 0 4px; }
-    .box-team-name { font-size: 12px; font-weight: 800; color: #0a1628; text-transform: uppercase; letter-spacing: 2px; }
-    .box-team-score { font-size: 18px; font-weight: 900; color: #0a1628; }
-    .box-divider { height: 1px; background: #e5e7eb; margin: 16px 0; }
-
-    /* Stats tables */
-    .stats-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 4px; }
-    .stats-table th { padding: 4px 5px; font-size: 9px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid #e5e7eb; }
-    .stats-table th:first-child { text-align: left; }
-    .stats-table th:not(:first-child) { text-align: center; }
-    .stats-table td { padding: 3px 5px; font-size: 13px; }
-    .stats-table td:first-child { color: #1a2332; white-space: nowrap; }
-    .stats-table td:not(:first-child) { text-align: center; color: #4b5563; }
-    .stats-table .player-jersey { color: #9ca3af; font-size: 10px; margin-right: 4px; }
-    .stats-table .player-pos { color: #9ca3af; font-size: 10px; margin-left: 4px; }
-    .stats-table .totals td { border-top: 2px solid #d1d5db; color: #0a1628; font-weight: 700; }
-    .stat-r { color: #16a34a !important; font-weight: 600; }
-    .stat-h { color: #d97706 !important; font-weight: 600; }
-    .stat-rbi { color: #2563eb !important; font-weight: 600; }
-    .stat-so { color: #dc2626 !important; font-weight: 600; }
-    .stat-k { color: #d97706 !important; font-weight: 600; }
-    .stat-zero { color: #d1d5db !important; font-weight: 400; }
-
-    /* Leaderboard */
-    .lb-toggle { display: flex; gap: 0; margin-bottom: 20px; background: #e5e7eb; border-radius: 8px; overflow: hidden; width: fit-content; }
-    .lb-btn { background: transparent; border: none; cursor: pointer; padding: 8px 20px; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; transition: all 0.2s; }
-    .lb-btn.active { background: linear-gradient(135deg, #cc0000, #990000); color: #fff; }
-    .lb-min-note { font-size: 10px; color: #6b7280; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
-    .lb-panel { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .lb-table { width: 100%; border-collapse: collapse; }
-    .lb-table th { padding: 10px 6px; font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; background: #fff; }
-    .lb-table th:first-child, .lb-table th:nth-child(2) { text-align: left; }
-    .lb-table th:not(:first-child):not(:nth-child(2)) { text-align: center; }
-    .lb-table td { padding: 10px 6px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
-    .lb-table td:first-child { font-weight: 800; }
-    .lb-table td:first-child, .lb-table td:nth-child(2) { text-align: left; }
-    .lb-table td:not(:first-child):not(:nth-child(2)) { text-align: center; color: #4b5563; }
-    .lb-table tr:hover { background: #f8f9fa; }
-    .lb-rank-gold { color: #d97706; }
-    .lb-rank-gray { color: #9ca3af; }
-    .lb-player-name { font-weight: 600; color: #1a2332; font-size: 13px; }
-    .lb-player-team { font-size: 10px; color: #6b7280; }
-    .lb-highlight { color: #cc0000 !important; font-weight: 800 !important; font-size: 16px !important; }
-
-    /* POTG */
-    .potg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-    .potg-card { background: #fff; border-radius: 16px; padding: 24px; position: relative; overflow: hidden; animation: fadeIn 0.3s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .potg-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 4px; }
-    .potg-name { font-size: 22px; font-weight: 800; color: #0a1628; text-transform: uppercase; line-height: 1.1; }
-    .potg-info { font-size: 12px; color: #6b7280; margin-top: 2px; }
-    .potg-score-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
-    .potg-highlights { background: #f3f4f6; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 15px; color: #1a2332; font-weight: 600; }
-    .potg-game { font-size: 11px; color: #6b7280; }
-
-    /* All Tournament Team */
-    .att-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 16px; }
-    .att-card { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; padding: 16px; display: flex; align-items: center; gap: 14px; animation: fadeIn 0.3s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .att-rank { font-size: 24px; font-weight: 900; min-width: 32px; text-align: center; }
-    .att-rank.gold { color: #d97706; }
-    .att-rank.silver { color: #6b7280; }
-    .att-rank.bronze { color: #b45309; }
-    .att-rank.normal { color: #d1d5db; }
-    .att-info { flex: 1; }
-    .att-name { font-size: 16px; font-weight: 800; color: #0a1628; text-transform: uppercase; }
-    .att-team { font-size: 11px; color: #6b7280; }
-    .att-stats { font-size: 12px; color: #4b5563; margin-top: 4px; }
-    .att-score { font-size: 20px; font-weight: 800; color: #cc0000; min-width: 50px; text-align: right; }
-
-    /* Standings */
-    .standings-panel { background: #fff; border: 1px solid #e2e5ea; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .standings-table { width: 100%; border-collapse: collapse; }
-    .standings-table th { padding: 10px 8px; font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; border-bottom: 1px solid #e5e7eb; }
-    .standings-table th:first-child, .standings-table th:nth-child(2) { text-align: left; }
-    .standings-table th:not(:first-child):not(:nth-child(2)) { text-align: center; }
-    .standings-table td { padding: 10px 8px; font-size: 13px; color: #1a2332; }
-    .standings-table td:first-child, .standings-table td:nth-child(2) { text-align: left; }
-    .standings-table td:not(:first-child):not(:nth-child(2)) { text-align: center; }
-    .standings-table tr:hover { background: #f8f9fa; }
-    .w-col { color: #16a34a; font-weight: 700; font-size: 14px; }
-    .l-col { color: #dc2626; font-weight: 700; font-size: 14px; }
-    .diff-pos { color: #16a34a; font-weight: 700; }
-    .diff-neg { color: #dc2626; font-weight: 700; }
-
-    /* Loading */
-    .loading { text-align: center; padding: 60px; color: #9ca3af; }
-    .section-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 16px; }
-    .footer { border-top: 1px solid #e5e7eb; padding: 16px 20px; text-align: center; font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 2px; background: #fff; }
-    
-    /* Player Card Download */
-    .dl-icon { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; background: rgba(204,0,0,0.08); border: 1px solid rgba(204,0,0,0.15); color: #cc0000; font-size: 12px; vertical-align: middle; margin-left: 6px; transition: all 0.2s; }
-    .dl-icon:hover { background: rgba(204,0,0,0.15); transform: scale(1.1); }
-    .dl-icon svg { width: 14px; height: 14px; fill: currentColor; }
-    #playerCardCanvas { display: none; }
-    .empty { text-align: center; padding: 60px; color: #9ca3af; }
+    @media(max-width:640px){
+      .hero h1{font-size:30px}
+      .controls-card{gap:12px}
+      .seg{margin-left:0;width:100%;justify-content:center}
+      .grid{grid-template-columns:1fr}
+    }
   </style>
 </head>
 <body>
-
-  <header class="header">
-    <div class="header-inner">
-      <div class="header-top">
-        <div class="logo-area">
-          <span class="usssa-badge fc">USSSA</span>
-          <span class="ec-title fc">EVENT CENTRAL</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div id="liveCount" class="live-badge fc" style="display:none;"><span class="live-dot"></span><span id="liveNum"></span> LIVE</div>
-          <div id="clock" class="clock fc"></div>
-        </div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img src="usssa-logo.png" alt="USSSA" onerror="this.style.display='none'">
+        <span class="wm">USSSA<span class="stats">STATS</span></span>
       </div>
-      <div class="event-info">
-        <div class="event-name fc">USSSA FL Event Central</div>
-        <div class="event-meta">Live Stats • Leaderboards • Player of the Game</div>
-      </div>
-      <!-- Age Group Filter -->
-      <div class="age-bar" id="ageBar">
-      </div>
-      <div class="tabs">
-        <button class="tab fc active" data-tab="scores">Scoreboard</button>
-        <button class="tab fc" data-tab="potg">Player of the Game</button>
-        <button class="tab fc" data-tab="leaders">Leaderboards</button>
-        <button class="tab fc" data-tab="tournament">All-Tournament</button>
-        <button class="tab fc" data-tab="standings">Standings</button>
-      </div>
+      <div class="gc-badge"><span class="gc-dot"></span>Powered by <b>GameChanger</b></div>
     </div>
   </header>
 
-  <main class="content">
-    <div id="panel-scores" class="panel">
-      <div id="games-list" class="games-list"><div class="loading">Loading games...</div></div>
+  <section class="hero">
+    <div class="hero-inner">
+      <h1>National Leaders</h1>
+      <p id="heroSub">Youth baseball batting &amp; pitching leaders across every USSSA event.</p>
     </div>
+  </section>
 
-    <div id="panel-potg" class="panel" style="display:none;">
-      <div class="section-label fc">Top Performers</div>
-      <div id="potg-grid" class="potg-grid"><div class="loading">Loading...</div></div>
-    </div>
-
-    <div id="panel-leaders" class="panel" style="display:none;">
-      <div class="lb-toggle">
-        <button class="lb-btn fc active" data-lb="batting">Batting</button>
-        <button class="lb-btn fc" data-lb="pitching">Pitching</button>
+  <div class="controls">
+    <div class="controls-card">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Age</span>
+        <select class="age" id="ageSelect" aria-label="Age group"></select>
       </div>
-      <div id="lb-min-note" class="lb-min-note"></div>
-      <div class="lb-panel">
-        <div id="lb-content"><div class="loading">Loading...</div></div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Class</span>
+        <div class="class-btns" id="classBtns"></div>
       </div>
-    </div>
-
-    <div id="panel-tournament" class="panel" style="display:none;">
-      <div class="section-label fc">⭐ All-Tournament Team — Top 15 Performers</div>
-      <div id="att-min-note" class="lb-min-note"></div>
-      <div id="att-content"><div class="loading">Loading...</div></div>
-    </div>
-
-    <div id="panel-standings" class="panel" style="display:none;">
-      <div class="section-label fc">Standings</div>
-      <div class="standings-panel">
-        <div id="standings-content"><div class="loading">Loading...</div></div>
+      <div class="seg" id="seg">
+        <button data-section="batting" class="active">Batting</button>
+        <button data-section="pitching">Pitching</button>
       </div>
     </div>
+  </div>
+  <div class="qual-note" id="qualNote"></div>
+
+  <main id="main">
+    <div class="state"><div class="spin"></div>Loading leaders…</div>
   </main>
 
-  <footer class="footer fc">Powered by USSSA Event Central • Stats via GameChanger</footer>
-  <canvas id="playerCardCanvas" width="1080" height="1350"></canvas>
+  <footer><b>USSSA Stats</b> &nbsp;•&nbsp; Powered by GameChanger</footer>
 
   <script>
     const API_BASE = window.location.origin;
-    const urlParams = new URLSearchParams(window.location.search);
-    const eventFilter = urlParams.get('event') || '';
-    let currentTab = 'scores';
-    let currentLB = 'batting';
-    let currentAge = '';
-    let expandedGame = null;
-    let gamesData = [];
-    let leaderData = {};
-    let ageGroups = [];
 
-    // Set event name in header if present
-    if (eventFilter) {
-      const nameEl = document.querySelector('.event-name');
-      if (nameEl) nameEl.textContent = eventFilter;
+    // Class buttons the product wants, mapped from GC age-group codes like
+    // "12Maj","11AAA","10AA","9A","13AA60/90". Open ("Op") is intentionally hidden.
+    const CLASSES = ['Major','AAA','AA','A'];
+    function parseCode(code){
+      const m = String(code).match(/^(\d+)\s*([A-Za-z]+)/);
+      if(!m) return null;
+      const ageNum = parseInt(m[1],10);
+      const suf = m[2].toLowerCase();
+      let cls = null;
+      if(suf.startsWith('maj')) cls='Major';
+      else if(suf.startsWith('aaa')) cls='AAA';
+      else if(suf.startsWith('aa')) cls='AA';
+      else if(suf.startsWith('a')) cls='A';
+      else if(suf.startsWith('op')) cls='Open';
+      return { ageNum, cls, code };
     }
 
-    // ─── CLOCK ──────────────────────────────
-    function updateClock() {
-      document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    }
-    updateClock();
-    setInterval(updateClock, 30000);
+    const BAT_CATS = [
+      ['AVG','Batting Avg','min 5 AB'],
+      ['HR','Home Runs',''],
+      ['RBI','RBI',''],
+      ['H','Hits',''],
+      ['R','Runs',''],
+      ['SB','Stolen Bases',''],
+      ['OBP','On-Base %','min 5 AB'],
+      ['OPS','OPS','min 5 AB'],
+    ];
+    const PIT_CATS = [
+      ['ERA','Earned Run Avg','min 5 IP'],
+      ['SO','Strikeouts',''],
+      ['WHIP','WHIP','min 5 IP'],
+    ];
+    const PENDING = new Set(['HR','SB']);
 
-    // ─── AGE GROUP FILTER ───────────────────
-    async function loadAgeGroups() {
-      try {
-        const res = await fetch(API_BASE + '/api/ec/age-groups' + (eventFilter ? '?event=' + encodeURIComponent(eventFilter) : ''));
+    let byAge = {};
+    let ages = [];
+    let currentAge = null;
+    let currentClass = null;
+    let currentSection = 'batting';
+    let cache = {};
+
+    async function init(){
+      try{
+        const res = await fetch(API_BASE + '/api/ec/age-groups');
         const data = await res.json();
-        ageGroups = data.age_groups || [];
-        renderAgeBar();
-      } catch (err) {
-        console.error('Age groups error:', err);
-      }
+        const codes = (data.age_groups || []).map(a => a.age_group);
+        byAge = {};
+        for(const code of codes){
+          const p = parseCode(code);
+          if(!p || !p.cls || p.cls === 'Open') continue;
+          if(!byAge[p.ageNum]) byAge[p.ageNum] = {};
+          if(!byAge[p.ageNum][p.cls]) byAge[p.ageNum][p.cls] = code;
+        }
+        ages = Object.keys(byAge).map(Number).sort((a,b)=>a-b);
+        if(ages.length === 0){ showState('No divisions available yet.'); return; }
+        buildAgeSelect();
+        buildSeg();
+        currentAge = ages[0];
+        document.getElementById('ageSelect').value = currentAge;
+        selectAge(currentAge);
+      }catch(e){ showState('Couldn’t load divisions. ' + e.message); }
     }
 
-    function renderAgeBar() {
-      const bar = document.getElementById('ageBar');
-      let html = '';
-      ageGroups.forEach((ag, i) => {
-        html += `<button class="age-btn fc${i === 0 ? ' active' : ''}" data-age="${ag.age_group}" onclick="setAge('${ag.age_group}')">${ag.age_group}</button>`;
+    function buildAgeSelect(){
+      const sel = document.getElementById('ageSelect');
+      sel.innerHTML = ages.map(a => `<option value="${a}">${a}U</option>`).join('');
+      sel.onchange = () => selectAge(parseInt(sel.value,10));
+    }
+    function buildSeg(){
+      document.querySelectorAll('#seg button').forEach(b => {
+        b.onclick = () => {
+          currentSection = b.dataset.section;
+          document.querySelectorAll('#seg button').forEach(x => x.classList.toggle('active', x===b));
+          render();
+        };
       });
-      bar.innerHTML = html;
-      // Default to first age group
-      if (ageGroups.length > 0 && !currentAge) {
-        currentAge = ageGroups[0].age_group;
-      }
     }
 
-    function setAge(age) {
+    function selectAge(age){
       currentAge = age;
-      document.querySelectorAll('.age-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.age === age);
+      const avail = byAge[age] || {};
+      const wrap = document.getElementById('classBtns');
+      wrap.innerHTML = CLASSES.map(c =>
+        `<button class="class-btn" data-class="${c}" ${avail[c]?'':'disabled'}>${c}</button>`
+      ).join('');
+      wrap.querySelectorAll('.class-btn').forEach(btn => {
+        btn.onclick = () => { if(!btn.disabled){ selectClass(btn.dataset.class); } };
       });
-      loadAll();
+      let pick = (currentClass && avail[currentClass]) ? currentClass
+               : CLASSES.find(c => avail[c]);
+      if(pick) selectClass(pick);
+      else showState('No leaders in this age group yet.');
     }
 
-    function ageParam() {
-      const parts = [];
-      if (eventFilter) parts.push('event=' + encodeURIComponent(eventFilter));
-      if (currentAge) parts.push('age_group=' + encodeURIComponent(currentAge));
-      return parts.join('&');
+    function selectClass(cls){
+      currentClass = cls;
+      document.querySelectorAll('.class-btn').forEach(b => b.classList.toggle('active', b.dataset.class===cls));
+      loadLeaders();
     }
 
-    // ─── TABS ───────────────────────────────
-    document.querySelectorAll('.tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        btn.classList.add('active');
-        currentTab = btn.dataset.tab;
-        document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
-        document.getElementById('panel-' + currentTab).style.display = 'block';
-      });
-    });
-
-    // ─── LB TOGGLE ──────────────────────────
-    document.querySelectorAll('.lb-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.lb-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentLB = btn.dataset.lb;
-        renderLeaderboard();
-      });
-    });
-
-    // ─── DOWNLOAD ICON SVG ────────────────
-    const DL_SVG = '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 4h14v-2H5v2z"/></svg>';
-    function dlBtn(name, jersey, team, highlights, score, type) {
-      const data = JSON.stringify({name,jersey,team,highlights,score,type}).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
-      return `<span class="dl-icon" onclick='generatePlayerCard(${data})' title="Download Player Card">${DL_SVG}</span>`;
+    async function loadLeaders(){
+      const code = (byAge[currentAge]||{})[currentClass];
+      if(!code){ showState('No leaders for this selection yet.'); return; }
+      document.getElementById('qualNote').textContent = '';
+      if(cache[code]){ render(); return; }
+      showState('Loading leaders…', true);
+      try{
+        const res = await fetch(API_BASE + '/api/ec/leaderboards?age_group=' + encodeURIComponent(code));
+        cache[code] = await res.json();
+        render();
+      }catch(e){ showState('Couldn’t load leaders. ' + e.message); }
     }
 
-    // ─── PLAYER CARD GENERATOR ──────────────
-    function generatePlayerCard(p) {
-      const canvas = document.getElementById('playerCardCanvas');
-      const ctx = canvas.getContext('2d');
-      const W = 1080, H = 1350;
-      canvas.width = W;
-      canvas.height = H;
-
-      // Background
-      const bg = ctx.createLinearGradient(0, 0, W, H);
-      bg.addColorStop(0, '#020a18');
-      bg.addColorStop(0.4, '#0a1832');
-      bg.addColorStop(0.7, '#12204a');
-      bg.addColorStop(1, '#050e1e');
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, W, H);
-
-      // Subtle diagonal lines
-      ctx.save();
-      ctx.globalAlpha = 0.03;
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1;
-      for (let i = -H; i < W + H; i += 60) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i + H, H);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // Gold accent bar at top
-      const topGrad = ctx.createLinearGradient(0, 0, W, 0);
-      topGrad.addColorStop(0, '#b45309');
-      topGrad.addColorStop(0.5, '#f59e0b');
-      topGrad.addColorStop(1, '#b45309');
-      ctx.fillStyle = topGrad;
-      ctx.fillRect(0, 0, W, 6);
-
-      // Corner accents
-      ctx.strokeStyle = 'rgba(245,158,11,0.2)';
-      ctx.lineWidth = 2;
-      [[40,40,1],[W-40,40,2],[40,H-40,3],[W-40,H-40,4]].forEach(([x,y,c]) => {
-        ctx.beginPath();
-        const s = 50;
-        if(c===1){ctx.moveTo(x,y+s);ctx.lineTo(x,y);ctx.lineTo(x+s,y);}
-        if(c===2){ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y+s);}
-        if(c===3){ctx.moveTo(x,y-s);ctx.lineTo(x,y);ctx.lineTo(x+s,y);}
-        if(c===4){ctx.moveTo(x-s,y);ctx.lineTo(x,y);ctx.lineTo(x,y-s);}
-        ctx.stroke();
-      });
-
-      // USSSA badge
-      ctx.fillStyle = '#cc0000';
-      ctx.beginPath();
-      ctx.roundRect(40, 40, 120, 40, 8);
-      ctx.fill();
-      ctx.font = '900 18px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#fff';
-      ctx.textAlign = 'center';
-      ctx.fillText('USSSA', 100, 67);
-      ctx.font = '700 16px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.textAlign = 'left';
-      ctx.fillText('EVENT CENTRAL', 180, 67);
-
-      // Type label (POTG / All-Tournament / Leaderboard)
-      const typeLabel = p.type === 'potg' ? '⭐ PLAYER OF THE GAME' : p.type === 'att' ? '⭐ ALL-TOURNAMENT TEAM' : '🏆 TOURNAMENT LEADER';
-      ctx.font = '700 22px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#f59e0b';
-      ctx.textAlign = 'center';
-      ctx.fillText(typeLabel, W/2, 160);
-
-      // Gold divider
-      ctx.save();
-      ctx.globalAlpha = 0.15;
-      const divGrad = ctx.createLinearGradient(100, 0, W-100, 0);
-      divGrad.addColorStop(0, 'transparent');
-      divGrad.addColorStop(0.3, '#f59e0b');
-      divGrad.addColorStop(0.7, '#f59e0b');
-      divGrad.addColorStop(1, 'transparent');
-      ctx.strokeStyle = divGrad;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(100, 185);
-      ctx.lineTo(W-100, 185);
-      ctx.stroke();
-      ctx.restore();
-
-      // Jersey circle
-      ctx.beginPath();
-      ctx.arc(W/2, 320, 100, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(245,158,11,0.08)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(245,158,11,0.3)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      
-      // Jersey number
-      ctx.font = '900 72px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#f59e0b';
-      ctx.textAlign = 'center';
-      ctx.fillText('#' + (p.jersey || ''), W/2, 345);
-
-      // Player name
-      ctx.font = '900 64px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText((p.name || '').toUpperCase(), W/2, 500);
-
-      // Team name
-      ctx.font = '600 26px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(p.team || '', W/2, 545);
-
-      // Score badge
-      if (p.score) {
-        ctx.beginPath();
-        ctx.arc(W/2, 650, 55, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(245,158,11,0.1)';
-        ctx.fill();
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.font = '800 36px "Barlow Condensed", sans-serif';
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillText(p.score, W/2, 662);
-        ctx.font = '600 12px "Barlow Condensed", sans-serif';
-        ctx.fillStyle = '#64748b';
-        ctx.fillText('PERFORMANCE SCORE', W/2, 690);
-      }
-
-      // Stats highlights box
-      const hlY = 750;
-      ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      ctx.beginPath();
-      ctx.roundRect(80, hlY, W-160, 120, 16);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Split highlights into batting | pitching
-      const hlParts = (p.highlights || '').split(' | ');
-      ctx.font = '700 28px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#e2e8f0';
-      ctx.textAlign = 'center';
-      
-      if (hlParts.length > 1) {
-        ctx.fillText('🏏  ' + hlParts[0], W/2, hlY + 45);
-        ctx.fillText('⚾  ' + hlParts[1], W/2, hlY + 85);
-      } else {
-        ctx.fillText(p.highlights || '', W/2, hlY + 65);
-      }
-
-      // Individual stat boxes
-      const stats = parseHighlights(p.highlights || '');
-      if (stats.length > 0) {
-        const boxW = 140;
-        const totalW = stats.length * boxW + (stats.length - 1) * 12;
-        let startX = (W - totalW) / 2;
-        const statY = 920;
-
-        stats.forEach((s, i) => {
-          const bx = startX + i * (boxW + 12);
-          ctx.fillStyle = 'rgba(255,255,255,0.03)';
-          ctx.beginPath();
-          ctx.roundRect(bx, statY, boxW, 100, 12);
-          ctx.fill();
-
-          ctx.font = '800 36px "Barlow Condensed", sans-serif';
-          ctx.fillStyle = '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.fillText(s.val, bx + boxW/2, statY + 45);
-
-          ctx.font = '600 14px "Barlow Condensed", sans-serif';
-          ctx.fillStyle = '#64748b';
-          ctx.fillText(s.label, bx + boxW/2, statY + 72);
-        });
-      }
-
-      // Event name
-      ctx.font = '600 22px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#475569';
-      ctx.textAlign = 'center';
-      ctx.fillText('Space Coast Presidents Day • ' + (currentAge || '11U'), W/2, 1120);
-
-      // Date
-      const today = new Date();
-      const dateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      ctx.font = '500 18px "Barlow", sans-serif';
-      ctx.fillStyle = '#334155';
-      ctx.fillText(dateStr, W/2, 1155);
-
-      // Footer
-      ctx.font = '600 14px "Barlow Condensed", sans-serif';
-      ctx.fillStyle = '#1e293b';
-      ctx.fillText('POWERED BY USSSA EVENT CENTRAL • STATS VIA GAMECHANGER', W/2, H - 50);
-
-      // Gold bottom bar
-      ctx.fillStyle = topGrad;
-      ctx.fillRect(0, H - 6, W, 6);
-
-      // Download
-      const link = document.createElement('a');
-      link.download = `${(p.name||'Player').replace(/\s/g,'-')}-${currentAge}-PlayerCard.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+    function showState(msg, spin){
+      document.getElementById('main').innerHTML =
+        `<div class="state">${spin?'<div class="spin"></div>':'<div class="big">⚾</div>'}${msg}</div>`;
     }
 
-    // Parse highlights string into stat boxes
-    function parseHighlights(hl) {
-      const stats = [];
-      // Batting: "3-for-8 (0.375), 3 RBI, 2 R"
-      const abMatch = hl.match(/(\d+)-for-(\d+)/);
-      if (abMatch) stats.push({ val: abMatch[1] + '-' + abMatch[2], label: 'H-AB' });
-      
-      const avgMatch = hl.match(/\(([0-9.]+)\)/);
-      if (avgMatch) stats.push({ val: avgMatch[1], label: 'AVG' });
+    function render(){
+      const code = (byAge[currentAge]||{})[currentClass];
+      const data = cache[code];
+      if(!data){ return; }
+      const leaders = (data.leaders && data.leaders[currentSection]) || {};
+      const cats = currentSection === 'batting' ? BAT_CATS : PIT_CATS;
 
-      const rbiMatch = hl.match(/(\d+)\s*RBI/);
-      if (rbiMatch) stats.push({ val: rbiMatch[1], label: 'RBI' });
+      const note = document.getElementById('qualNote');
+      note.textContent = `${currentAge}U ${currentClass} · National · ${data.totalGames||0} games tracked · min ${data.minAB||5} AB / ${data.minIP||5} IP to qualify for rate stats`;
 
-      const rMatch = hl.match(/(\d+)\s*R(?:\s|,|$|\|)/);
-      if (rMatch) stats.push({ val: rMatch[1], label: 'RUNS' });
-
-      // Pitching: "5 IP, 6 K"
-      const ipMatch = hl.match(/([\d.]+)\s*IP/);
-      if (ipMatch) stats.push({ val: ipMatch[1], label: 'IP' });
-
-      const kMatch = hl.match(/(\d+)\s*K/);
-      if (kMatch) stats.push({ val: kMatch[1], label: 'K' });
-
-      return stats.slice(0, 6);
-    }
-    // ─── HELPERS ────────────────────────────
-    function sc(val, cls) {
-      if (!val || val === 0) return `<td class="fc stat-zero">0</td>`;
-      return `<td class="fc ${cls}">${val}</td>`;
-    }
-
-    // ─── FETCH GAMES ────────────────────────
-    async function loadGames() {
-      try {
-        const q = ageParam();
-        const res = await fetch(API_BASE + '/api/ec/games' + (q ? '?' + q : ''));
-        const data = await res.json();
-        gamesData = data.games || [];
-        
-        // Sort: live games first, then by date/time desc
-        gamesData.sort((a, b) => {
-          if (a.status === 'live' && b.status !== 'live') return -1;
-          if (b.status === 'live' && a.status !== 'live') return 1;
-          return 0; // keep existing order (date desc from API)
-        });
-        
-        renderGames();
-      } catch (err) {
-        document.getElementById('games-list').innerHTML = '<div class="empty">Failed to load games</div>';
-      }
-    }
-
-    function renderGames() {
-      const container = document.getElementById('games-list');
-      const liveCount = gamesData.filter(g => g.status === 'live').length;
-
-      if (liveCount > 0) {
-        document.getElementById('liveCount').style.display = 'flex';
-        document.getElementById('liveNum').textContent = liveCount;
-      } else {
-        document.getElementById('liveCount').style.display = 'none';
-      }
-
-      if (gamesData.length === 0) {
-        container.innerHTML = '<div class="empty">No games yet</div>';
-        return;
-      }
-
-      container.innerHTML = gamesData.map(g => {
-        const isLive = g.status === 'live';
-        const isFinal = g.status === 'final';
-        const isExpanded = expandedGame === g.id;
-        const awayWinning = (g.away_score || 0) > (g.home_score || 0);
-        const homeWinning = (g.home_score || 0) > (g.away_score || 0);
-        
-        // Format date/time
-        let dateStr = '';
-        if (g.game_date) {
-          const d = new Date(g.game_date + 'T12:00:00');
-          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          dateStr = `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
+      const cards = cats.map(([key,title,sub]) => {
+        const list = (leaders[key] || []).slice(0,10);
+        let body;
+        if(list.length === 0){
+          const pend = PENDING.has(key);
+          body = `<div class="empty${pend?' pending':''}">${pend?'Awaiting stat sync — HR/SB populate after the next data update.':'No qualified leaders yet.'}</div>`;
+        }else{
+          body = list.map((p,i) => `
+            <div class="row r${i+1}">
+              <div class="rk">${i+1}</div>
+              <div class="who"><div class="nm">${esc(p.name)}</div><div class="tm">${esc(p.team||'')}</div></div>
+              <div class="val">${esc(String(p.value))}</div>
+            </div>`).join('');
         }
-        if (g.game_time) dateStr += ` • ${g.game_time}`;
-
-        return `
-          <div class="game-card ${isLive ? 'live' : ''}" data-id="${g.id}">
-            ${isLive ? '<div class="shimmer-bar"></div>' : ''}
-            <div class="game-header" onclick="toggleBoxScore('${g.id}')">
-              <div class="game-top">
-                <span class="game-meta fc">${g.age_group || '—'} • ${g.event_name || g.field || 'TBD'}</span>
-                <div style="display:flex;align-items:center;gap:8px;">
-                  ${isLive ? `<span class="game-status live fc"><span class="live-dot"></span>LIVE</span>` : ''}
-                  ${isFinal ? `<span class="game-status final fc">FINAL</span>` : ''}
-                  ${!isLive && !isFinal ? `<span class="game-status upcoming fc">${g.scheduled_time || ''}</span>` : ''}
-                  <span class="expand-arrow ${isExpanded ? 'open' : ''}">▼</span>
-                </div>
-              </div>
-              ${dateStr ? `<div class="game-datetime fc">${dateStr}</div>` : ''}
-              <div class="team-row">
-                <span class="team-name">${g.away_team}</span>
-                <span class="team-score fc ${awayWinning ? 'winning' : 'losing'}">${g.away_score ?? '-'}</span>
-              </div>
-              <div class="team-row" style="margin-bottom:0;">
-                <span class="team-name">${g.home_team}</span>
-                <span class="team-score fc ${homeWinning ? 'winning' : 'losing'}">${g.home_score ?? '-'}</span>
-              </div>
-              ${!isExpanded ? '<div class="expand-hint fc">Tap for box score</div>' : ''}
-            </div>
-            <div class="box-score-panel ${isExpanded ? 'open' : ''}" id="box-${g.id}"></div>
-          </div>
-        `;
+        return `<div class="lcard"><h3>${title}${sub?`<span class="sub">${sub}</span>`:''}</h3>${body}</div>`;
       }).join('');
+
+      document.getElementById('main').innerHTML =
+        `<div class="sec-hd">${currentSection==='batting'?'Batting Leaders':'Pitching Leaders'}</div><div class="grid">${cards}</div>`;
     }
 
-    // ─── TOGGLE BOX SCORE ───────────────────
-    async function toggleBoxScore(gameId) {
-      if (expandedGame === gameId) { expandedGame = null; renderGames(); return; }
-      expandedGame = gameId;
-      renderGames();
-      const panel = document.getElementById('box-' + gameId);
-      panel.innerHTML = '<div class="loading" style="padding:20px;">Loading box score...</div>';
-      panel.classList.add('open');
-
-      try {
-        const res = await fetch(API_BASE + '/api/ec/games/' + gameId);
-        const data = await res.json();
-        const g = data.game;
-        let html = renderTeamBox(g.away_team, g.away_score, g.boxScore.away);
-        html += '<div class="box-divider"></div>';
-        html += renderTeamBox(g.home_team, g.home_score, g.boxScore.home);
-        panel.innerHTML = html;
-      } catch (err) {
-        panel.innerHTML = '<div class="empty">Failed to load box score</div>';
-      }
-    }
-
-    function renderTeamBox(teamName, score, data) {
-      let html = `<div class="box-team-header">
-        <span class="box-team-name fc">${teamName}</span>
-        <span class="box-team-score fc">${score}</span>
-      </div>`;
-
-      if (data.batting && data.batting.length > 0) {
-        const totals = data.batting.reduce((t, p) => ({
-          ab: t.ab+(p.ab||0), r: t.r+(p.r||0), h: t.h+(p.h||0),
-          rbi: t.rbi+(p.rbi||0), bb: t.bb+(p.bb||0), so: t.so+(p.so||0)
-        }), {ab:0,r:0,h:0,rbi:0,bb:0,so:0});
-
-        html += `<table class="stats-table"><thead><tr>
-          <th class="fc" style="text-align:left">BATTING</th>
-          <th class="fc">AB</th><th class="fc">R</th><th class="fc">H</th>
-          <th class="fc">RBI</th><th class="fc">BB</th><th class="fc">SO</th>
-        </tr></thead><tbody>`;
-
-        for (const p of data.batting) {
-          html += `<tr>
-            <td><span class="player-jersey fc">#${p.jersey}</span>${p.name}</td>
-            ${sc(p.ab,'')}${sc(p.r,'stat-r')}${sc(p.h,'stat-h')}${sc(p.rbi,'stat-rbi')}${sc(p.bb,'')}${sc(p.so,'stat-so')}
-          </tr>`;
-        }
-        html += `<tr class="totals">
-          <td class="fc" style="font-size:10px;letter-spacing:1px;">TEAM</td>
-          <td class="fc">${totals.ab}</td><td class="fc">${totals.r}</td><td class="fc">${totals.h}</td>
-          <td class="fc">${totals.rbi}</td><td class="fc">${totals.bb}</td><td class="fc">${totals.so}</td>
-        </tr></tbody></table>`;
-      }
-
-      if (data.pitching && data.pitching.length > 0) {
-        html += `<table class="stats-table" style="margin-top:8px;"><thead><tr>
-          <th class="fc" style="text-align:left">PITCHING</th>
-          <th class="fc">IP</th><th class="fc">H</th><th class="fc">R</th>
-          <th class="fc">ER</th><th class="fc">BB</th><th class="fc">SO</th>
-        </tr></thead><tbody>`;
-        for (const p of data.pitching) {
-          html += `<tr>
-            <td><span class="player-jersey fc">#${p.jersey}</span>${p.name}</td>
-            <td class="fc" style="text-align:center;">${p.ip||0}</td>
-            <td class="fc" style="text-align:center;">${p.h||0}</td>
-            ${sc(p.r,'stat-so')}${sc(p.er,'stat-so')}${sc(p.bb,'')}${sc(p.so,'stat-k')}
-          </tr>`;
-        }
-        html += '</tbody></table>';
-      }
-      return html;
-    }
-
-    // ─── LEADERBOARDS ───────────────────────
-    async function loadLeaderboards() {
-      try {
-        const q = ageParam();
-        const params = q ? q + '&min_ab=5&min_ip=5' : 'min_ab=5&min_ip=5';
-        const res = await fetch(API_BASE + '/api/ec/leaderboards?' + params);
-        leaderData = await res.json();
-        document.getElementById('lb-min-note').textContent = `Minimum ${leaderData.minAB || 5} AB for batting • Minimum ${leaderData.minIP || 5} IP for pitching`;
-        renderLeaderboard();
-      } catch (err) {
-        document.getElementById('lb-content').innerHTML = '<div class="empty">Failed to load leaderboards</div>';
-      }
-    }
-
-    function renderLeaderboard() {
-      const container = document.getElementById('lb-content');
-      const isBatting = currentLB === 'batting';
-      const data = isBatting ? leaderData.batting : leaderData.pitching;
-
-      if (!data || data.length === 0) {
-        container.innerHTML = `<div class="empty">No players meet the minimum requirement yet (${isBatting ? (leaderData.minAB||5)+' AB' : (leaderData.minIP||5)+' IP'})</div>`;
-        return;
-      }
-
-      if (isBatting) {
-        let html = `<table class="lb-table"><thead><tr>
-          <th class="fc">#</th><th class="fc">Player</th><th class="fc">AVG</th>
-          <th class="fc">GP</th><th class="fc">AB</th><th class="fc">H</th>
-          <th class="fc">RBI</th><th class="fc">R</th><th class="fc">BB</th><th class="fc">SO</th>
-        </tr></thead><tbody>`;
-        data.forEach((row, i) => {
-          html += `<tr>
-            <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
-            <td><div class="lb-player-name">${row.name} ${dlBtn(row.name, row.jersey, row.team, row.avg + ' AVG, ' + row.h + ' H, ' + row.rbi + ' RBI, ' + row.r + ' R', '', 'lb')}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
-            <td class="fc lb-highlight">${row.avg}</td>
-            <td>${row.games}</td><td>${row.ab}</td><td>${row.h}</td>
-            <td>${row.rbi}</td><td>${row.r}</td><td>${row.bb}</td><td>${row.so}</td>
-          </tr>`;
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
-      } else {
-        let html = `<table class="lb-table"><thead><tr>
-          <th class="fc">#</th><th class="fc">Player</th><th class="fc">ERA</th>
-          <th class="fc">GP</th><th class="fc">IP</th><th class="fc">K</th>
-          <th class="fc">BB</th><th class="fc">WHIP</th><th class="fc">H</th><th class="fc">ER</th>
-        </tr></thead><tbody>`;
-        data.forEach((row, i) => {
-          html += `<tr>
-            <td class="fc ${i < 3 ? 'lb-rank-gold' : 'lb-rank-gray'}">${i+1}</td>
-            <td><div class="lb-player-name">${row.name} ${dlBtn(row.name, row.jersey, row.team, row.era + ' ERA, ' + row.ip + ' IP, ' + row.so + ' K', '', 'lb')}</div><div class="lb-player-team">#${row.jersey} • ${row.team}</div></td>
-            <td class="fc lb-highlight">${row.era}</td>
-            <td>${row.games}</td><td>${row.ip}</td><td>${row.so}</td>
-            <td>${row.bb}</td><td>${row.whip}</td><td>${row.h}</td><td>${row.er}</td>
-          </tr>`;
-        });
-        html += '</tbody></table>';
-        container.innerHTML = html;
-      }
-    }
-
-    // ─── POTG ───────────────────────────────
-    async function loadPOTG() {
-      try {
-        const q = ageParam();
-        const res = await fetch(API_BASE + '/api/ec/potg' + (q ? '?' + q : ''));
-        const data = await res.json();
-        renderPOTG(data.potg || []);
-      } catch (err) {
-        document.getElementById('potg-grid').innerHTML = '<div class="empty">Failed to load POTG</div>';
-      }
-    }
-
-    function renderPOTG(potgs) {
-      const container = document.getElementById('potg-grid');
-      if (potgs.length === 0) {
-        container.innerHTML = '<div class="empty">No player of the game data yet</div>';
-        return;
-      }
-
-      container.innerHTML = potgs.map(p => {
-        const pScore = p.potg_score || p.score || 0;
-        const pName = p.player?.player_name || p.name || 'Unknown';
-        const pJersey = p.player?.jersey_number || p.jersey || '';
-        const pTeam = p.team?.team_name || p.team || '';
-        const pHighlights = p.highlights || '';
-        const pGame = typeof p.game === 'string' ? p.game : '';
-
-        const scoreColor = pScore >= 20 ? '#d97706' : pScore >= 10 ? '#6b7280' : '#9ca3af';
-        const borderColor = pScore >= 20 ? 'rgba(217,119,6,0.3)' : 'rgba(0,0,0,0.08)';
-
-        return `
-          <div class="potg-card" style="border: 1px solid ${borderColor};">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
-              <div>
-                <div class="potg-label fc" style="color:#f59e0b;">⭐ Player of the Game</div>
-                <div class="potg-name fc">${pName} ${dlBtn(pName, pJersey, pTeam, pHighlights, pScore, 'potg')}</div>
-                <div class="potg-info">#${pJersey} •• ${pTeam}</div>
-              </div>
-              <div class="potg-score-circle fc" style="border: 2px solid ${scoreColor}; color: ${scoreColor};">
-                ${pScore}
-              </div>
-            </div>
-            <div class="potg-highlights fc">${pHighlights}</div>
-            <div class="potg-game fc">${pGame}</div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // ─── ALL-TOURNAMENT TEAM ────────────────
-    async function loadAllTournament() {
-      try {
-        const q = ageParam();
-        const params = q ? q + '&min_ab=5&min_ip=5' : 'min_ab=5&min_ip=5';
-        const res = await fetch(API_BASE + '/api/ec/all-tournament?' + params);
-        const data = await res.json();
-        document.getElementById('att-min-note').textContent = 
-          `${data.ageGroup || 'All'} • Min ${data.minAB || 5} AB or ${data.minIP || 5} IP • Weighted performance score`;
-        renderAllTournament(data.team || []);
-      } catch (err) {
-        document.getElementById('att-content').innerHTML = '<div class="empty">Failed to load all-tournament team</div>';
-      }
-    }
-
-    function renderAllTournament(players) {
-      const container = document.getElementById('att-content');
-      if (players.length === 0) {
-        container.innerHTML = '<div class="empty">Not enough games played yet to determine all-tournament team</div>';
-        return;
-      }
-
-      container.innerHTML = '<div class="att-grid">' + players.map((p, i) => {
-        const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
-        return `
-          <div class="att-card">
-            <div class="att-rank fc ${rankClass}">${i + 1}</div>
-            <div class="att-info">
-              <div class="att-name fc">${p.name} ${dlBtn(p.name, p.jersey, p.team, p.highlights, p.score, 'att')}</div>
-              <div class="att-team">#${p.jersey} • ${p.team} • ${p.games} GP</div>
-              <div class="att-stats">${p.highlights}</div>
-            </div>
-            <div class="att-score fc">${p.score}</div>
-          </div>
-        `;
-      }).join('') + '</div>';
-    }
-
-    // ─── STANDINGS ──────────────────────────
-    async function loadStandings() {
-      try {
-        const q = ageParam();
-        const res = await fetch(API_BASE + '/api/ec/standings' + (q ? '?' + q : ''));
-        const data = await res.json();
-        renderStandings(data.standings || []);
-      } catch (err) {
-        document.getElementById('standings-content').innerHTML = '<div class="empty">Failed to load standings</div>';
-      }
-    }
-
-    function renderStandings(standings) {
-      const container = document.getElementById('standings-content');
-      if (standings.length === 0) { container.innerHTML = '<div class="empty">No standings yet</div>'; return; }
-
-      let html = `<table class="standings-table"><thead><tr>
-        <th class="fc">#</th><th class="fc">Team</th><th class="fc">W</th><th class="fc">L</th>
-        <th class="fc">RS</th><th class="fc">RA</th><th class="fc">+/-</th>
-      </tr></thead><tbody>`;
-
-      standings.forEach((t, i) => {
-        const diffClass = t.diff.startsWith('+') ? 'diff-pos' : 'diff-neg';
-        html += `<tr>
-          <td class="fc" style="font-weight:800;color:${i < 2 ? '#d97706' : '#9ca3af'}">${i+1}</td>
-          <td style="color:#1a2332;font-weight:600;">${t.team}</td>
-          <td class="fc w-col">${t.w}</td><td class="fc l-col">${t.l}</td>
-          <td style="color:#94a3b8;">${t.rs}</td><td style="color:#94a3b8;">${t.ra}</td>
-          <td class="fc ${diffClass}">${t.diff}</td>
-        </tr>`;
-      });
-
-      html += '</tbody></table>';
-      container.innerHTML = html;
-    }
-
-    // ─── LOAD ALL ───────────────────────────
-    async function loadAll() {
-      await Promise.all([loadGames(), loadLeaderboards(), loadStandings(), loadPOTG(), loadAllTournament()]);
-    }
-
-    // ─── INIT ───────────────────────────────
-    async function init() {
-      await loadAgeGroups();
-      await loadAll();
-
-      // Auto-refresh every 60 seconds
-      setInterval(async () => {
-        await loadGames();
-        if (currentTab === 'leaders') await loadLeaderboards();
-        if (currentTab === 'standings') await loadStandings();
-        if (currentTab === 'potg') await loadPOTG();
-        if (currentTab === 'tournament') await loadAllTournament();
-      }, 60000);
-    }
+    function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
     init();
   </script>

@@ -1463,13 +1463,17 @@ app.get('/api/ec/leaderboards', async (req, res) => {
       const jersey = s.player?.jersey_number || '';
 
       if (s.stat_type === 'batting') {
-        if (!batters[pid]) batters[pid] = { name, team, jersey, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, games: 0 };
+        if (!batters[pid]) batters[pid] = { name, team, jersey, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, hr: 0, sb: 0, doubles: 0, triples: 0, games: 0 };
         batters[pid].ab += s.ab || 0;
         batters[pid].r += s.r || 0;
         batters[pid].h += s.h || 0;
         batters[pid].rbi += s.rbi || 0;
         batters[pid].bb += s.bb || 0;
         batters[pid].so += s.so || 0;
+        batters[pid].hr += s.hr || 0;
+        batters[pid].sb += s.sb || 0;
+        batters[pid].doubles += s.doubles || 0;
+        batters[pid].triples += s.triples || 0;
         batters[pid].games++;
       }
 
@@ -1485,31 +1489,68 @@ app.get('/api/ec/leaderboards', async (req, res) => {
       }
     }
 
-    // Calculate batting averages — filter by minimum AB
-    const battingLeaders = Object.values(batters)
-      .filter(b => b.ab >= minAB)
-      .map(b => ({
-        ...b,
-        avg: b.ab > 0 ? (b.h / b.ab).toFixed(3) : '.000',
-        obp: (b.ab + b.bb) > 0 ? ((b.h + b.bb) / (b.ab + b.bb)).toFixed(3) : '.000',
-        slg: b.ab > 0 ? ((b.h * 1.0 + (b.doubles || 0) * 1.0 + (b.triples || 0) * 2.0 + (b.hr || 0) * 3.0) / b.ab).toFixed(3) : '.000',
-      }))
-      .sort((a, b) => parseFloat(b.avg) - parseFloat(a.avg))
-      .slice(0, 15);
+    // Derived rate stats per player
+    const fmt3 = v => (v).toFixed(3).replace(/^0\./, '.');
+    const battersArr = Object.values(batters).map(b => {
+      const avg = b.ab > 0 ? b.h / b.ab : 0;
+      const obp = (b.ab + b.bb) > 0 ? (b.h + b.bb) / (b.ab + b.bb) : 0;
+      const singles = Math.max(0, b.h - b.doubles - b.triples - b.hr);
+      const tb = singles + b.doubles * 2 + b.triples * 3 + b.hr * 4;
+      const slg = b.ab > 0 ? tb / b.ab : 0;
+      return { ...b, avg, obp, slg, ops: obp + slg, tb };
+    });
+    const pitchersArr = Object.values(pitchers).map(p => ({
+      ...p,
+      era: p.ip > 0 ? (p.er / p.ip) * 7 : 0,
+      whip: p.ip > 0 ? (p.bb + p.h) / p.ip : 0,
+    }));
 
-    // Calculate pitching leaders — filter by minimum IP
-    const pitchingLeaders = Object.values(pitchers)
-      .filter(p => p.ip >= minIP)
-      .map(p => ({
-        ...p,
-        era: p.ip > 0 ? ((p.er / p.ip) * 7).toFixed(2) : '0.00',
-        whip: p.ip > 0 ? ((p.bb + p.h) / p.ip).toFixed(2) : '0.00',
-        kPerGame: p.ip > 0 ? ((p.so / p.ip) * 7).toFixed(1) : '0.0',
-      }))
-      .sort((a, b) => parseFloat(a.era) - parseFloat(b.era))
-      .slice(0, 15);
+    const qualifiedBat = battersArr.filter(b => b.ab >= minAB);
+    const qualifiedPit = pitchersArr.filter(p => p.ip >= minIP);
 
-    res.json({ batting: battingLeaders, pitching: pitchingLeaders, minAB, minIP });
+    const batEntry = (b, value, extra = {}) => ({
+      name: b.name, team: b.team, jersey: b.jersey, value, games: b.games,
+      avg: fmt3(b.avg), obp: fmt3(b.obp), slg: fmt3(b.slg), ops: fmt3(b.ops),
+      h: b.h, hr: b.hr, rbi: b.rbi, r: b.r, sb: b.sb, ab: b.ab, ...extra,
+    });
+    const rateLeaders = (arr, key, fmt = fmt3) =>
+      [...arr].sort((a, b) => b[key] - a[key]).slice(0, 15).map(b => batEntry(b, fmt(b[key])));
+    const countLeaders = (arr, key) =>
+      [...arr].filter(b => (b[key] || 0) > 0).sort((a, b) => b[key] - a[key] || b.h - a.h)
+              .slice(0, 15).map(b => batEntry(b, b[key]));
+
+    const pitEntry = (p, value, extra = {}) => ({
+      name: p.name, team: p.team, jersey: p.jersey, value, games: p.games,
+      era: p.era.toFixed(2), whip: p.whip.toFixed(2), so: p.so, ip: Math.round(p.ip * 10) / 10, ...extra,
+    });
+
+    const battingLeadersByCat = {
+      AVG: rateLeaders(qualifiedBat, 'avg'),
+      OBP: rateLeaders(qualifiedBat, 'obp'),
+      OPS: rateLeaders(qualifiedBat, 'ops'),
+      HR:  countLeaders(battersArr, 'hr'),
+      RBI: countLeaders(battersArr, 'rbi'),
+      H:   countLeaders(battersArr, 'h'),
+      R:   countLeaders(battersArr, 'r'),
+      SB:  countLeaders(battersArr, 'sb'),
+    };
+    const pitchingLeadersByCat = {
+      ERA:  [...qualifiedPit].sort((a, b) => a.era - b.era).slice(0, 15).map(p => pitEntry(p, p.era.toFixed(2))),
+      SO:   [...pitchersArr].filter(p => p.so > 0).sort((a, b) => b.so - a.so).slice(0, 15).map(p => pitEntry(p, p.so)),
+      WHIP: [...qualifiedPit].sort((a, b) => a.whip - b.whip).slice(0, 15).map(p => pitEntry(p, p.whip.toFixed(2))),
+    };
+
+    const battingLeaders = battingLeadersByCat.AVG;
+    const pitchingLeaders = pitchingLeadersByCat.ERA;
+
+    res.json({
+      batting: battingLeaders,
+      pitching: pitchingLeaders,
+      leaders: { batting: battingLeadersByCat, pitching: pitchingLeadersByCat },
+      minAB, minIP,
+      totalGames: gameIds.length,
+      ageGroup, event: eventName,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
