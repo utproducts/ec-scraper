@@ -16,7 +16,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve Event Central frontend
-app.use('/ec', express.static('frontend'));
+app.use('/ec', express.static('frontend', {
+  setHeaders: (res, filePath) => {
+    // Don't let HTML get cached stale — always revalidate so updates show immediately.
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}));
 
 // Initialize services
 const twilioClient = twilio(
