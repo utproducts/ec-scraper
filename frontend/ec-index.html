@@ -37,7 +37,11 @@
     .gc-dot{width:8px;height:8px;border-radius:50%;background:#57d977;box-shadow:0 0 0 3px rgba(87,217,119,.2)}
 
     .hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dk) 100%);color:#fff;padding:26px 20px 30px}
-    .hero-inner{max-width:1200px;margin:0 auto}
+    .hero-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+    .sport-toggle{display:flex;background:rgba(255,255,255,.14);border-radius:999px;padding:5px;gap:4px}
+    .sport-toggle button{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:17px;letter-spacing:.7px;border:none;background:transparent;color:#dfe4f3;padding:9px 24px;border-radius:999px;cursor:pointer;transition:.15s;text-transform:uppercase}
+    .sport-toggle button:hover:not(.active){color:#fff}
+    .sport-toggle button.active{background:#fff;color:var(--navy)}
     .hero h1{font-family:'Barlow Condensed',sans-serif;font-size:40px;font-weight:700;letter-spacing:1px;line-height:1;text-transform:uppercase}
     .hero p{color:#b9c2de;margin-top:7px;font-size:14px;font-weight:500}
 
@@ -86,6 +90,7 @@
 
     @media(max-width:640px){
       .hero h1{font-size:30px}
+      .sport-toggle{width:100%;justify-content:center}
       .controls-card{gap:12px}
       .seg{margin-left:0;width:100%;justify-content:center}
       .grid{grid-template-columns:1fr}
@@ -104,8 +109,14 @@
 
   <section class="hero">
     <div class="hero-inner">
-      <h1 id="heroTitle">National Leaderboard</h1>
-      <p id="heroSub">Youth baseball batting &amp; pitching leaders across all USSSA events.</p>
+      <div class="hero-text">
+        <h1 id="heroTitle">National Leaderboard</h1>
+        <p id="heroSub">Youth baseball batting &amp; pitching leaders across all USSSA events.</p>
+      </div>
+      <div class="sport-toggle" id="sportToggle">
+        <button data-sport="baseball" class="active">Baseball</button>
+        <button data-sport="fastpitch">Fast Pitch</button>
+      </div>
     </div>
   </section>
 
@@ -148,6 +159,7 @@
     const _TEAMS=["Scorpions Elite","CBC Riverhawks","PVAA Riaan","JCB Diamond Kings","Ocala Heat","FCA Blueclaws","Trojans Baseball","Space Coast Stars","Tampa Mudcats","Naples Storm","Jax Jaguars","Brevard Bombers"];
     const _FN=["Mason","Liam","Jaxon","Caleb","Eli","Beckham","Aiden","Cooper","Wyatt","Carter","Brooks","Nolan","Easton","Hudson"];
     const _LN=["Moon","Quintero","Riaan","Delgado","Kelley","Jarzynka","Bennett","Foster","Hayes","Cruz","Park","Vance","Reyes","Tate"];
+    const _FN_G=["Addison","Harper","Brooklyn","Savannah","Peyton","Riley","Kennedy","Bailey","Morgan","Avery","Sydney","Reagan","Paisley","Delaney"];
     const _V={
       AVG:[".623",".598",".571",".556",".542",".528",".511",".495",".480",".466"],
       HR:[9,8,7,6,5,5,4,4,3,2],
@@ -170,8 +182,9 @@
     function _mockEntries(cat,off,seed){
       seed = seed||0;
       const bump = _COUNT.has(cat) ? (seed % 4) : 0;
+      const FN = (currentSport === 'fastpitch') ? _FN_G : _FN;
       return _V[cat].map((val,i)=>({
-        name:_FN[(i+off+seed)%_FN.length]+" "+_LN[(i*2+off+seed)%_LN.length],
+        name:FN[(i+off+seed)%FN.length]+" "+_LN[(i*2+off+seed)%_LN.length],
         team:_TEAMS[(i*3+off+seed)%_TEAMS.length],
         state:_ST[(i*4+off)%_ST.length],
         jersey:String(((i*7+off)%30)+1),
@@ -196,7 +209,9 @@
 
     // Class buttons the product wants, mapped from GC age-group codes like
     // "12Maj","11AAA","10AA","9A","13AA60/90". Open ("Op") is intentionally hidden.
-    const CLASSES = ['Major','AAA','AA','A'];
+    const CLASSES = ['Major','AAA','AA','A'];          // baseball
+    const FP_CLASSES = ['A','B','C'];                  // fastpitch
+    const FP_AGES = [8,10,12,14,16,18];                // fastpitch: even ages only
     // Region selector: National (default) + states. Filters the board by player state.
     const STATES=[["FL","Florida"],["GA","Georgia"],["TX","Texas"],["CA","California"],["AL","Alabama"],["NC","North Carolina"],["TN","Tennessee"],["SC","South Carolina"],["OH","Ohio"],["AZ","Arizona"],["LA","Louisiana"],["MO","Missouri"],["MS","Mississippi"],["VA","Virginia"],["PA","Pennsylvania"],["IL","Illinois"]];
     const STATE_NAMES=Object.fromEntries(STATES);
@@ -235,33 +250,72 @@
 
     let byAge = {};
     let ages = [];
+    let classes = CLASSES;       // active class list (sport-dependent)
     let currentAge = null;
     let currentClass = null;
     let currentSection = 'batting';
-    let currentState = null;   // null = National
+    let currentState = null;     // null = National
+    let currentSport = 'baseball';
+    let baseballDiv = null;      // cached baseball divisions from the API
     let cache = {};
 
     async function init(){
-      try{
-        const res = await fetch(API_BASE + '/api/ec/age-groups');
-        const data = await res.json();
-        const codes = (data.age_groups || []).map(a => a.age_group);
-        byAge = {};
-        for(const code of codes){
-          const p = parseCode(code);
-          if(!p || !p.cls || p.cls === 'Open') continue;
-          if(!byAge[p.ageNum]) byAge[p.ageNum] = {};
-          if(!byAge[p.ageNum][p.cls]) byAge[p.ageNum][p.cls] = code;
-        }
-        ages = Object.keys(byAge).map(Number).sort((a,b)=>a-b);
-        if(ages.length === 0){ showState('No divisions available yet.'); return; }
-        buildAgeSelect();
-        buildStateSelect();
-        buildSeg();
-        currentAge = ages[0];
-        document.getElementById('ageSelect').value = currentAge;
-        selectAge(currentAge);
-      }catch(e){ showState('Couldn’t load divisions. ' + e.message); }
+      buildStateSelect();
+      buildSeg();
+      buildSportToggle();
+      await setSport('baseball');
+    }
+
+    function buildSportToggle(){
+      document.querySelectorAll('#sportToggle button').forEach(b => {
+        b.onclick = () => { if(b.dataset.sport !== currentSport) setSport(b.dataset.sport); };
+      });
+    }
+
+    async function loadBaseballDivisions(){
+      if(baseballDiv) return baseballDiv;
+      const res = await fetch(API_BASE + '/api/ec/age-groups');
+      const data = await res.json();
+      const codes = (data.age_groups || []).map(a => a.age_group);
+      const ba = {};
+      for(const code of codes){
+        const p = parseCode(code);
+        if(!p || !p.cls || p.cls === 'Open') continue;
+        if(!ba[p.ageNum]) ba[p.ageNum] = {};
+        if(!ba[p.ageNum][p.cls]) ba[p.ageNum][p.cls] = code;
+      }
+      baseballDiv = { byAge: ba, ages: Object.keys(ba).map(Number).sort((a,b)=>a-b) };
+      return baseballDiv;
+    }
+
+    // Fastpitch has no live data yet — build a static division map (even ages, A/B/C).
+    function fastpitchDivisions(){
+      const ba = {};
+      for(const a of FP_AGES){ ba[a] = {}; for(const c of FP_CLASSES) ba[a][c] = a + c; }
+      return { byAge: ba, ages: [...FP_AGES] };
+    }
+
+    async function setSport(sport){
+      currentSport = sport;
+      document.querySelectorAll('#sportToggle button').forEach(b => b.classList.toggle('active', b.dataset.sport === sport));
+      if(sport === 'fastpitch'){
+        classes = FP_CLASSES;
+        const d = fastpitchDivisions(); byAge = d.byAge; ages = d.ages;
+        document.getElementById('heroSub').textContent = 'Youth fastpitch batting & pitching leaders across all USSSA events.';
+      } else {
+        classes = CLASSES;
+        let d;
+        try{ d = await loadBaseballDivisions(); }
+        catch(e){ showState('Couldn’t load divisions. ' + e.message); return; }
+        byAge = d.byAge; ages = d.ages;
+        document.getElementById('heroSub').textContent = 'Youth baseball batting & pitching leaders across all USSSA events.';
+      }
+      if(ages.length === 0){ showState('No divisions available yet.'); return; }
+      currentClass = null;   // re-pick for the new sport's class list
+      buildAgeSelect();
+      currentAge = ages[0];
+      document.getElementById('ageSelect').value = currentAge;
+      selectAge(currentAge);
     }
 
     function buildAgeSelect(){
@@ -289,14 +343,14 @@
       currentAge = age;
       const avail = byAge[age] || {};
       const wrap = document.getElementById('classBtns');
-      wrap.innerHTML = CLASSES.map(c =>
+      wrap.innerHTML = classes.map(c =>
         `<button class="class-btn" data-class="${c}" ${avail[c]?'':'disabled'}>${c}</button>`
       ).join('');
       wrap.querySelectorAll('.class-btn').forEach(btn => {
         btn.onclick = () => { if(!btn.disabled){ selectClass(btn.dataset.class); } };
       });
       let pick = (currentClass && avail[currentClass]) ? currentClass
-               : CLASSES.find(c => avail[c]);
+               : classes.find(c => avail[c]);
       if(pick) selectClass(pick);
       else showState('No leaders in this age group yet.');
     }
@@ -309,7 +363,7 @@
 
     function cacheKey(){
       const code = (byAge[currentAge]||{})[currentClass];
-      return code + '|' + (currentState || 'NAT');
+      return currentSport + '|' + code + '|' + (currentState || 'NAT');
     }
 
     async function loadLeaders(){
