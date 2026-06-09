@@ -164,19 +164,25 @@
       WHIP:["0.62","0.71","0.80","0.88","0.97","1.05","1.13","1.22","1.30","1.38"],
     };
     const _ST=["FL","GA","TX","CA","AL","NC","TN","SC","OH","AZ","LA","MO"];
-    function _mockEntries(cat,off){
+    const _COUNT=new Set(["HR","RBI","H","R","SB","W","SV","SO"]);
+    function _stateSeed(st){ let s=0; if(st) for(const c of st) s+=c.charCodeAt(0); return s; }
+    // off = per-category rotation; seed = per-state variation (different players & totals)
+    function _mockEntries(cat,off,seed){
+      seed = seed||0;
+      const bump = _COUNT.has(cat) ? (seed % 4) : 0;
       return _V[cat].map((val,i)=>({
-        name:_FN[(i+off)%_FN.length]+" "+_LN[(i*2+off)%_LN.length],
-        team:_TEAMS[(i*3+off)%_TEAMS.length],
+        name:_FN[(i+off+seed)%_FN.length]+" "+_LN[(i*2+off+seed)%_LN.length],
+        team:_TEAMS[(i*3+off+seed)%_TEAMS.length],
         state:_ST[(i*4+off)%_ST.length],
         jersey:String(((i*7+off)%30)+1),
-        value:String(val),
+        value:String(typeof val==='number' ? val+bump : val),
       }));
     }
     function mockData(state){
+      const s = _stateSeed(state);
       const d = { minAB:5, minIP:5, totalGames: state?42:128, leaders:{
-        batting:{ AVG:_mockEntries("AVG",0),HR:_mockEntries("HR",2),RBI:_mockEntries("RBI",4),H:_mockEntries("H",6),R:_mockEntries("R",1),SB:_mockEntries("SB",3),OBP:_mockEntries("OBP",5),OPS:_mockEntries("OPS",7) },
-        pitching:{ ERA:_mockEntries("ERA",8),W:_mockEntries("W",9),SV:_mockEntries("SV",10),SO:_mockEntries("SO",11),WHIP:_mockEntries("WHIP",1) }
+        batting:{ AVG:_mockEntries("AVG",0,s),HR:_mockEntries("HR",2,s),RBI:_mockEntries("RBI",4,s),H:_mockEntries("H",6,s),R:_mockEntries("R",1,s),SB:_mockEntries("SB",3,s),OBP:_mockEntries("OBP",5,s),OPS:_mockEntries("OPS",7,s) },
+        pitching:{ ERA:_mockEntries("ERA",8,s),W:_mockEntries("W",9,s),SV:_mockEntries("SV",10,s),SO:_mockEntries("SO",11,s),WHIP:_mockEntries("WHIP",1,s) }
       }};
       // When a state is selected, every leader on the board is from that state.
       if(state){
