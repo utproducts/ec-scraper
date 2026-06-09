@@ -104,13 +104,17 @@
 
   <section class="hero">
     <div class="hero-inner">
-      <h1>National Leaderboard</h1>
+      <h1 id="heroTitle">National Leaderboard</h1>
       <p id="heroSub">Youth baseball batting &amp; pitching leaders across all USSSA events.</p>
     </div>
   </section>
 
   <div class="controls">
     <div class="controls-card">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Region</span>
+        <select class="age" id="stateSelect" aria-label="Region"></select>
+      </div>
       <div class="ctrl-group">
         <span class="ctrl-label">Age</span>
         <select class="age" id="ageSelect" aria-label="Age group"></select>
@@ -169,17 +173,27 @@
         value:String(val),
       }));
     }
-    function mockData(){
-      return { minAB:5, minIP:5, totalGames:128, leaders:{
+    function mockData(state){
+      const d = { minAB:5, minIP:5, totalGames: state?42:128, leaders:{
         batting:{ AVG:_mockEntries("AVG",0),HR:_mockEntries("HR",2),RBI:_mockEntries("RBI",4),H:_mockEntries("H",6),R:_mockEntries("R",1),SB:_mockEntries("SB",3),OBP:_mockEntries("OBP",5),OPS:_mockEntries("OPS",7) },
         pitching:{ ERA:_mockEntries("ERA",8),W:_mockEntries("W",9),SV:_mockEntries("SV",10),SO:_mockEntries("SO",11),WHIP:_mockEntries("WHIP",1) }
       }};
+      // When a state is selected, every leader on the board is from that state.
+      if(state){
+        for(const sec of ['batting','pitching'])
+          for(const k in d.leaders[sec])
+            d.leaders[sec][k] = d.leaders[sec][k].map(e => ({...e, state}));
+      }
+      return d;
     }
     // ─────────────────────────────────────────────────────────────────────────
 
     // Class buttons the product wants, mapped from GC age-group codes like
     // "12Maj","11AAA","10AA","9A","13AA60/90". Open ("Op") is intentionally hidden.
     const CLASSES = ['Major','AAA','AA','A'];
+    // Region selector: National (default) + states. Filters the board by player state.
+    const STATES=[["FL","Florida"],["GA","Georgia"],["TX","Texas"],["CA","California"],["AL","Alabama"],["NC","North Carolina"],["TN","Tennessee"],["SC","South Carolina"],["OH","Ohio"],["AZ","Arizona"],["LA","Louisiana"],["MO","Missouri"],["MS","Mississippi"],["VA","Virginia"],["PA","Pennsylvania"],["IL","Illinois"]];
+    const STATE_NAMES=Object.fromEntries(STATES);
     function parseCode(code){
       const m = String(code).match(/^(\d+)\s*([A-Za-z]+)/);
       if(!m) return null;
@@ -218,6 +232,7 @@
     let currentAge = null;
     let currentClass = null;
     let currentSection = 'batting';
+    let currentState = null;   // null = National
     let cache = {};
 
     async function init(){
@@ -235,6 +250,7 @@
         ages = Object.keys(byAge).map(Number).sort((a,b)=>a-b);
         if(ages.length === 0){ showState('No divisions available yet.'); return; }
         buildAgeSelect();
+        buildStateSelect();
         buildSeg();
         currentAge = ages[0];
         document.getElementById('ageSelect').value = currentAge;
@@ -246,6 +262,12 @@
       const sel = document.getElementById('ageSelect');
       sel.innerHTML = ages.map(a => `<option value="${a}">${a}U</option>`).join('');
       sel.onchange = () => selectAge(parseInt(sel.value,10));
+    }
+    function buildStateSelect(){
+      const sel = document.getElementById('stateSelect');
+      sel.innerHTML = '<option value="">National (All)</option>' +
+        STATES.map(([ab,nm]) => `<option value="${ab}">${nm}</option>`).join('');
+      sel.onchange = () => { currentState = sel.value || null; loadLeaders(); };
     }
     function buildSeg(){
       document.querySelectorAll('#seg button').forEach(b => {
@@ -279,16 +301,24 @@
       loadLeaders();
     }
 
+    function cacheKey(){
+      const code = (byAge[currentAge]||{})[currentClass];
+      return code + '|' + (currentState || 'NAT');
+    }
+
     async function loadLeaders(){
       const code = (byAge[currentAge]||{})[currentClass];
       if(!code){ showState('No leaders for this selection yet.'); return; }
       document.getElementById('qualNote').textContent = '';
-      if(DEMO_MODE){ cache[code] = mockData(); render(); return; }
-      if(cache[code]){ render(); return; }
+      const ck = cacheKey();
+      if(DEMO_MODE){ cache[ck] = mockData(currentState); render(); return; }
+      if(cache[ck]){ render(); return; }
       showState('Loading leaders…', true);
       try{
-        const res = await fetch(API_BASE + '/api/ec/leaderboards?age_group=' + encodeURIComponent(code));
-        cache[code] = await res.json();
+        let url = API_BASE + '/api/ec/leaderboards?age_group=' + encodeURIComponent(code);
+        if(currentState) url += '&state=' + encodeURIComponent(currentState);
+        const res = await fetch(url);
+        cache[ck] = await res.json();
         render();
       }catch(e){ showState('Couldn’t load leaders. ' + e.message); }
     }
@@ -299,15 +329,17 @@
     }
 
     function render(){
-      const code = (byAge[currentAge]||{})[currentClass];
-      const data = cache[code];
+      const data = cache[cacheKey()];
       if(!data){ return; }
       const leaders = (data.leaders && data.leaders[currentSection]) || {};
       const cats = currentSection === 'batting' ? BAT_CATS : PIT_CATS;
 
+      const scopeName = currentState ? (STATE_NAMES[currentState] || currentState) : 'National';
+      document.getElementById('heroTitle').textContent = scopeName + ' Leaderboard';
+
       const note = document.getElementById('qualNote');
       const tag = DEMO_MODE ? 'SAMPLE DATA (live stats syncing soon) · ' : '';
-      note.textContent = `${tag}${currentAge}U ${currentClass} · National · ${data.totalGames||0} games tracked · min ${data.minAB||5} AB / ${data.minIP||5} IP to qualify for rate stats`;
+      note.textContent = `${tag}${currentAge}U ${currentClass} · ${scopeName} · ${data.totalGames||0} games tracked · min ${data.minAB||5} AB / ${data.minIP||5} IP to qualify for rate stats`;
 
       const cards = cats.map(([key,title,sub]) => {
         const list = (leaders[key] || []).slice(0,10);
