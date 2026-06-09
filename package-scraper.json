@@ -5,6 +5,7 @@
   "scripts": { "start": "node ec-scraper-service.mjs" },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "puppeteer": "^22.0.0"
+    "puppeteer": "^22.0.0",
+    "ws": "^8.18.0"
   }
 }
