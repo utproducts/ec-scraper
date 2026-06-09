@@ -219,7 +219,7 @@
     // "12Maj","11AAA","10AA","9A","13AA60/90". Open ("Op") is intentionally hidden.
     const CLASSES = ['Major','AAA','AA','A'];          // baseball
     const FP_CLASSES = ['A','B','C'];                  // fastpitch
-    const FP_AGES = [8,10,12,14,16,18];                // fastpitch: even ages only
+    const FP_AGES = [8,9,10,11,12,13,14,15,16,17,18];  // fastpitch: single-year ages
     // Region selector: National (default) + states. Filters the board by player state.
     const STATES=[["FL","Florida"],["GA","Georgia"],["TX","Texas"],["CA","California"],["AL","Alabama"],["NC","North Carolina"],["TN","Tennessee"],["SC","South Carolina"],["OH","Ohio"],["AZ","Arizona"],["LA","Louisiana"],["MO","Missouri"],["MS","Mississippi"],["VA","Virginia"],["PA","Pennsylvania"],["IL","Illinois"]];
     const STATE_NAMES=Object.fromEntries(STATES);
@@ -296,7 +296,7 @@
       return baseballDiv;
     }
 
-    // Fastpitch has no live data yet — build a static division map (even ages, A/B/C).
+    // Fastpitch has no live data yet — build a static division map (single-year ages, A/B/C).
     function fastpitchDivisions(){
       const ba = {};
       for(const a of FP_AGES){ ba[a] = {}; for(const c of FP_CLASSES) ba[a][c] = a + c; }
