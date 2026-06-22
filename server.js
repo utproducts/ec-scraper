@@ -1744,19 +1744,29 @@ app.get('/api/ec/all-tournament', async (req, res) => {
 // POST /api/ec/fetch-event-info — Parse event details from a USSSA event URL
 app.post('/api/ec/fetch-event-info', async (req, res) => {
   try {
-    const { url } = req.body;
-    if (!url || !url.includes('usssa.com')) {
-      return res.status(400).json({ error: 'A valid USSSA event URL is required' });
+    let { url, eventID } = req.body;
+    // Accept a bare eventID, or extract it from a pasted event URL
+    if (!eventID && url) {
+      const m = String(url).match(/eventID=(\d+)/i);
+      if (m) eventID = m[1];
+    }
+    if (eventID) eventID = String(eventID).replace(/\D/g, '');
+    if (!eventID && (!url || !url.includes('usssa.com'))) {
+      return res.status(400).json({ error: 'A USSSA event URL or eventID is required' });
+    }
+    // Always have a page URL so JSON-LD parsing (dates/venue/fee) can still run
+    if (!url && eventID) {
+      url = `https://www.usssa.com/baseball/event_home/?eventID=${eventID}&divisionID=null`;
     }
 
-    // Fetch the page HTML server-side
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EventCentral/1.0)' },
-    });
-    if (!response.ok) throw new Error('Failed to fetch page: ' + response.status);
-    const html = await response.text();
-
-    const $ = cheerio.load(html);
+    // Fetch the page HTML server-side (JSON-LD is best-effort; selpV2 API below is primary)
+    let $ = cheerio.load('');
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; EventCentral/1.0)' },
+      });
+      if (response.ok) $ = cheerio.load(await response.text());
+    } catch (e) { /* page fetch optional when we have an eventID */ }
 
     // 1. Parse JSON-LD structured data
     let jsonLd = {};
@@ -1767,7 +1777,7 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
       } catch (e) { /* skip malformed JSON-LD */ }
     });
 
-    const name = jsonLd.name || '';
+    let name = jsonLd.name || '';
     const startDate = jsonLd.startDate || '';
     const endDate = jsonLd.endDate || '';
     const venue = jsonLd.location?.name || '';
@@ -1777,7 +1787,7 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
     // 2. Scan page text for age groups (e.g. 9U, 10U, 14U)
     const pageText = $.text();
     const ageMatches = pageText.match(/\b(\d{1,2}U)\b/gi) || [];
-    const ageGroups = [...new Set(ageMatches.map(a => a.toUpperCase()))]
+    let ageGroups = [...new Set(ageMatches.map(a => a.toUpperCase()))]
       .sort((a, b) => parseInt(a) - parseInt(b));
 
     // 3. Parse contact/director info from mailto and tel links
@@ -1803,7 +1813,81 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
       directorPhone = phoneEl.text().trim();
     }
 
-    res.json({ name, startDate, endDate, venue, address, ageGroups, entryFee, directorName, directorEmail, directorPhone });
+    // 4. USSSA selpV2 API (by eventID): clean host contact + the "Who's Coming" registered teams.
+    //    The event page is an AngularJS app that loads all data via POST /api/?action=selpV2
+    //    with { eventID, divisionID, tabName }. tabName=lookWhoIsComing returns lwcDivisions[],
+    //    each division holding a teams[] list (USSSA TeamID, name, class, city, manager, record).
+    let teams = [];
+    if (eventID) {
+      const selp = async (tabName) => {
+        try {
+          const r = await fetch('https://www.usssa.com/api/?action=selpV2', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent': 'Mozilla/5.0 (compatible; EventCentral/1.0)',
+            },
+            body: `eventID=${encodeURIComponent(eventID)}&divisionID=null&tabName=${encodeURIComponent(tabName)}`,
+          });
+          if (!r.ok) return null;
+          return await r.json();
+        } catch (e) { return null; }
+      };
+      // "12 & Under AA" / "12U" / "12AA" -> "12U"
+      const parseAge = (s) => {
+        const str = String(s || '');
+        const m = str.match(/(\d{1,2})\s*(?:&\s*under|u\b)/i) || str.match(/(\d{1,2})/);
+        return m ? m[1] + 'U' : '';
+      };
+
+      const lwc = await selp('lookWhoIsComing');
+      if (lwc && lwc.info) {
+        if (!name && lwc.info.name) name = lwc.info.name;
+        // Prefer the page-scraped director; fall back to the USSSA event host only
+        // when the scrape found nothing.
+        if (!directorName && lwc.info.hostName) directorName = lwc.info.hostName;
+        if (!directorEmail && lwc.info.hostEmail) directorEmail = lwc.info.hostEmail;
+        if (!directorPhone && lwc.info.hostPhone) directorPhone = lwc.info.hostPhone;
+      }
+
+      const seen = new Set();
+      if (lwc && Array.isArray(lwc.lwcDivisions)) {
+        lwc.lwcDivisions.forEach((d) => {
+          (Array.isArray(d.teams) ? d.teams : []).forEach((t) => {
+            const id = t.TeamID || null;
+            if (id && seen.has(id)) return;
+            if (id) seen.add(id);
+            const cls = (t.divisionClass || d.className || '').trim();
+            const locParts = String(t.city || '').split(' - ');
+            const hasState = locParts.length > 1;
+            teams.push({
+              teamName: String(t.teamName || '').trim(),
+              usssaTeamId: id,
+              ageGroup: parseAge(cls),
+              divisionClass: cls,
+              teamClass: String(t.class || '').trim(),
+              state: hasState ? locParts[0].trim() : '',
+              city: hasState ? locParts.slice(1).join(' - ').trim() : String(t.city || '').trim(),
+              manager: String(t.manager || '').trim(),
+              overallRecord: t.overallRecord || '',
+              status: t.status || '',
+              rankingPoint: t.rankingPoint != null ? t.rankingPoint : null,
+              powerRating: t.powerRating != null ? t.powerRating : null,
+            });
+          });
+        });
+      }
+
+      const divAges = [...new Set(teams.map((t) => t.ageGroup).filter(Boolean))]
+        .sort((a, b) => parseInt(a) - parseInt(b));
+      if (divAges.length) ageGroups = divAges;
+    }
+
+    res.json({
+      name, startDate, endDate, venue, address, ageGroups, entryFee,
+      directorName, directorEmail, directorPhone,
+      eventID: eventID || null, teams,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
