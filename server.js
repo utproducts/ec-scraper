@@ -1886,7 +1886,8 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
             teams.push({
               teamName: String(t.teamName || '').trim(),
               usssaTeamId: id,
-              ageGroup: parseAge(cls),
+              // Store team age in your class convention (e.g. "12AA") to match existing ec_teams.
+              ageGroup: (String(t.class || '').trim() || parseAge(cls)),
               divisionClass: cls,
               teamClass: String(t.class || '').trim(),
               state: hasState ? locParts[0].trim() : '',
@@ -1901,7 +1902,9 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
         });
       }
 
-      const divAges = [...new Set(teams.map((t) => t.ageGroup).filter(Boolean))]
+      // Event-level Age Groups stay as buckets (e.g. "12U"), derived from division class,
+      // independent of the per-team class stored above.
+      const divAges = [...new Set(teams.map((t) => parseAge(t.divisionClass)).filter(Boolean))]
         .sort((a, b) => parseInt(a) - parseInt(b));
       if (divAges.length) ageGroups = divAges;
 
