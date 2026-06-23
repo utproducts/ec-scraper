@@ -1778,11 +1778,11 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
     });
 
     let name = jsonLd.name || '';
-    const startDate = jsonLd.startDate || '';
-    const endDate = jsonLd.endDate || '';
-    const venue = jsonLd.location?.name || '';
-    const address = jsonLd.location?.address?.streetAddress || '';
-    const entryFee = jsonLd.offers?.price ? '$' + parseFloat(jsonLd.offers.price).toFixed(0) : '';
+    let startDate = jsonLd.startDate || '';
+    let endDate = jsonLd.endDate || '';
+    let venue = jsonLd.location?.name || '';
+    let address = jsonLd.location?.address?.streetAddress || '';
+    let entryFee = jsonLd.offers?.price ? '$' + parseFloat(jsonLd.offers.price).toFixed(0) : '';
 
     // 2. Scan page text for age groups (e.g. 9U, 10U, 14U)
     const pageText = $.text();
@@ -1813,6 +1813,13 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
       directorPhone = phoneEl.text().trim();
     }
 
+    // Strip any unrendered AngularJS template placeholders ({{...}}) the static-HTML scrape
+    // may have grabbed before the page's JS ran (e.g. mailto:{{...contactEmail}}). Cleared
+    // here so the selpV2 API values below fill them in instead.
+    const noTpl = (s) => (typeof s === 'string' && s.indexOf('{{') !== -1) ? '' : s;
+    name = noTpl(name); venue = noTpl(venue); address = noTpl(address);
+    directorName = noTpl(directorName); directorEmail = noTpl(directorEmail); directorPhone = noTpl(directorPhone);
+
     // 4. USSSA selpV2 API (by eventID): clean host contact + the "Who's Coming" registered teams.
     //    The event page is an AngularJS app that loads all data via POST /api/?action=selpV2
     //    with { eventID, divisionID, tabName }. tabName=lookWhoIsComing returns lwcDivisions[],
@@ -1840,15 +1847,31 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
         return m ? m[1] + 'U' : '';
       };
 
-      const lwc = await selp('lookWhoIsComing');
-      if (lwc && lwc.info) {
-        if (!name && lwc.info.name) name = lwc.info.name;
-        // Prefer the page-scraped director; fall back to the USSSA event host only
-        // when the scrape found nothing.
-        if (!directorName && lwc.info.hostName) directorName = lwc.info.hostName;
-        if (!directorEmail && lwc.info.hostEmail) directorEmail = lwc.info.hostEmail;
-        if (!directorPhone && lwc.info.hostPhone) directorPhone = lwc.info.hostPhone;
-      }
+      // Parse USSSA's display date range ("Jun 24 -28" or "Jun 28 - Jul 2") into ISO dates.
+      const parseDateRange = (str, year) => {
+        const out = { start: '', end: '' };
+        if (!str) return out;
+        const mon = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+        const y = parseInt(year) || new Date().getFullYear();
+        const fmt = (mo, d) => (mo == null || !d) ? '' : new Date(Date.UTC(y, mo, d)).toISOString().slice(0, 10);
+        const pairs = [];
+        const re = /([A-Za-z]{3})[a-z]*\s+(\d{1,2})/g;
+        let mm;
+        while ((mm = re.exec(str)) !== null) pairs.push({ mo: mon[mm[1].toLowerCase()], d: parseInt(mm[2]) });
+        if (pairs.length) {
+          out.start = fmt(pairs[0].mo, pairs[0].d);
+          if (pairs.length >= 2) out.end = fmt(pairs[1].mo, pairs[1].d);
+          else { const tail = str.match(/-\s*(\d{1,2})\s*$/); if (tail) out.end = fmt(pairs[0].mo, parseInt(tail[1])); }
+        }
+        return out;
+      };
+
+      // home -> eventDivisions (dates/fee/director); venues -> venue name + address
+      const [lwc, homeTab, venuesTab] = await Promise.all([
+        selp('lookWhoIsComing'), selp('home'), selp('venues'),
+      ]);
+      const info = (lwc && lwc.info) || (homeTab && homeTab.info) || (venuesTab && venuesTab.info) || {};
+      if (!name && info.name) name = info.name;
 
       const seen = new Set();
       if (lwc && Array.isArray(lwc.lwcDivisions)) {
@@ -1881,6 +1904,42 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
       const divAges = [...new Set(teams.map((t) => t.ageGroup).filter(Boolean))]
         .sort((a, b) => parseInt(a) - parseInt(b));
       if (divAges.length) ageGroups = divAges;
+
+      // ── Fill venue / dates / fee / director from selpV2 when JSON-LD came up empty ──
+      const divisions = (homeTab && homeTab.home && Array.isArray(homeTab.home.eventDivisions))
+        ? homeTab.home.eventDivisions : [];
+      if (!startDate && divisions.length) {
+        const ds = divisions.map((d) => d.startDate).filter(Boolean).sort();
+        if (ds.length) startDate = ds[0].slice(0, 10);
+      }
+      const range = parseDateRange(info.dates, info.season);
+      if (!startDate && range.start) startDate = range.start;
+      if (!endDate && range.end) endDate = range.end;
+      if (!endDate && startDate) endDate = startDate;
+
+      if (!entryFee && divisions.length) {
+        const fees = divisions.map((d) => d.entryFee).filter((v) => v != null && !isNaN(v));
+        if (fees.length) entryFee = '$' + Math.max(...fees);
+      }
+
+      const venuesArr = (venuesTab && Array.isArray(venuesTab.venues)) ? venuesTab.venues : [];
+      if (!venue && venuesArr.length) {
+        venue = venuesArr.map((v) => v.ParkName).filter(Boolean).join('; ');
+        const v0 = venuesArr[0];
+        if (!address) {
+          address = [v0.StreetAddress, v0.City, (v0.StateABR || v0.StateName), v0.Zip]
+            .filter(Boolean).join(', ');
+        }
+      }
+
+      // Director: page scrape first; then division-level contact; then event host
+      if (divisions.length) {
+        if (!directorName && divisions[0].director) directorName = divisions[0].director;
+        if (!directorEmail && divisions[0].directorEmail) directorEmail = divisions[0].directorEmail;
+      }
+      if (!directorName && info.hostName) directorName = info.hostName;
+      if (!directorEmail && info.hostEmail) directorEmail = info.hostEmail;
+      if (!directorPhone && info.hostPhone) directorPhone = info.hostPhone;
     }
 
     res.json({
