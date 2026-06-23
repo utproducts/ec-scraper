@@ -1866,9 +1866,9 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
         return out;
       };
 
-      // home -> eventDivisions (dates/fee/director); venues -> venue name + address
-      const [lwc, homeTab, venuesTab] = await Promise.all([
-        selp('lookWhoIsComing'), selp('home'), selp('venues'),
+      // home -> eventDivisions (dates/fee); venues -> venue name + address; contacts -> event director
+      const [lwc, homeTab, venuesTab, contactsTab] = await Promise.all([
+        selp('lookWhoIsComing'), selp('home'), selp('venues'), selp('contacts'),
       ]);
       const info = (lwc && lwc.info) || (homeTab && homeTab.info) || (venuesTab && venuesTab.info) || {};
       if (!name && info.name) name = info.name;
@@ -1932,7 +1932,17 @@ app.post('/api/ec/fetch-event-info', async (req, res) => {
         }
       }
 
-      // Director: page scrape first; then division-level contact; then event host
+      // Director contact priority: page scrape (if real) -> selpV2 "contacts" tab event
+      // director (the actual assigned director, e.g. National Office events) -> division
+      // contact -> event host. The contacts tab uses "name?/email?/phone?" placeholders when
+      // unset, so validate before trusting them.
+      const ed = (contactsTab && contactsTab.contacts) || {};
+      const okName = (n) => n && n !== 'name?';
+      const okEmail = (e) => e && e.indexOf('@') !== -1;
+      const okPhone = (p) => p && /\d/.test(p);
+      if (!directorName && okName(ed.eventDirectorName)) directorName = ed.eventDirectorName;
+      if (!directorEmail && okEmail(ed.eventDirectorEmail)) directorEmail = ed.eventDirectorEmail;
+      if (!directorPhone && okPhone(ed.eventDirectorPhone)) directorPhone = ed.eventDirectorPhone;
       if (divisions.length) {
         if (!directorName && divisions[0].director) directorName = divisions[0].director;
         if (!directorEmail && divisions[0].directorEmail) directorEmail = divisions[0].directorEmail;
